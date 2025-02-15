@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package taskapebackend;
+
+option go_package = "./taskape-proto/";
+
+service BackendRequests {
+    rpc loginUser(UserLoginRequest) returns (UserLoginResponse) {}
+    rpc verifyUserToken(VerifyUserRequest) returns (VerifyUserResponse) {}
+    rpc registerNewProfile(RegisterNewProfileRequest) returns (RegisterNewProfileResponse) {}
+}
+
+message UserLoginRequest {
+    string phone = 1;
+}
+
+message UserLoginResponse {
+    string token = 1;
+    bool profile_exists = 2;
+}
+
+message VerifyUserRequest {
+    string token =1;
+    string phone = 2;
+}
+
+message VerifyUserResponse {
+    bool success =1;
+}
+
+message RegisterNewProfileRequest {
+    string profile_picture=1;
+    string handle=2;
+    string bio=3;
+    string phone=4;
+    string auth_token=5;
+}
+
+message RegisterNewProfileResponse {
+    bool success=1;
+}
