@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: backendrequests.proto
+// source: proto/backendrequests.proto
 
-package __
+package taskape_proto
 
 import (
 	context "context"
@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BackendRequests_LoginUser_FullMethodName          = "/taskapebackend.BackendRequests/loginUser"
+	BackendRequests_LoginNewUser_FullMethodName       = "/taskapebackend.BackendRequests/loginNewUser"
+	BackendRequests_ValidateToken_FullMethodName      = "/taskapebackend.BackendRequests/validateToken"
+	BackendRequests_RefreshToken_FullMethodName       = "/taskapebackend.BackendRequests/refreshToken"
 	BackendRequests_VerifyUserToken_FullMethodName    = "/taskapebackend.BackendRequests/verifyUserToken"
 	BackendRequests_RegisterNewProfile_FullMethodName = "/taskapebackend.BackendRequests/registerNewProfile"
 )
@@ -28,7 +30,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BackendRequestsClient interface {
-	LoginUser(ctx context.Context, in *UserLoginRequest, opts ...grpc.CallOption) (*UserLoginResponse, error)
+	LoginNewUser(ctx context.Context, in *NewUserLoginRequest, opts ...grpc.CallOption) (*NewUserLoginResponse, error)
+	ValidateToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error)
+	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
 	VerifyUserToken(ctx context.Context, in *VerifyUserRequest, opts ...grpc.CallOption) (*VerifyUserResponse, error)
 	RegisterNewProfile(ctx context.Context, in *RegisterNewProfileRequest, opts ...grpc.CallOption) (*RegisterNewProfileResponse, error)
 }
@@ -41,10 +45,30 @@ func NewBackendRequestsClient(cc grpc.ClientConnInterface) BackendRequestsClient
 	return &backendRequestsClient{cc}
 }
 
-func (c *backendRequestsClient) LoginUser(ctx context.Context, in *UserLoginRequest, opts ...grpc.CallOption) (*UserLoginResponse, error) {
+func (c *backendRequestsClient) LoginNewUser(ctx context.Context, in *NewUserLoginRequest, opts ...grpc.CallOption) (*NewUserLoginResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UserLoginResponse)
-	err := c.cc.Invoke(ctx, BackendRequests_LoginUser_FullMethodName, in, out, cOpts...)
+	out := new(NewUserLoginResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_LoginNewUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) ValidateToken(ctx context.Context, in *ValidateTokenRequest, opts ...grpc.CallOption) (*ValidateTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateTokenResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_ValidateToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshTokenResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_RefreshToken_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +99,9 @@ func (c *backendRequestsClient) RegisterNewProfile(ctx context.Context, in *Regi
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
 type BackendRequestsServer interface {
-	LoginUser(context.Context, *UserLoginRequest) (*UserLoginResponse, error)
+	LoginNewUser(context.Context, *NewUserLoginRequest) (*NewUserLoginResponse, error)
+	ValidateToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error)
+	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
 	VerifyUserToken(context.Context, *VerifyUserRequest) (*VerifyUserResponse, error)
 	RegisterNewProfile(context.Context, *RegisterNewProfileRequest) (*RegisterNewProfileResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
@@ -88,8 +114,14 @@ type BackendRequestsServer interface {
 // pointer dereference when methods are called.
 type UnimplementedBackendRequestsServer struct{}
 
-func (UnimplementedBackendRequestsServer) LoginUser(context.Context, *UserLoginRequest) (*UserLoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LoginUser not implemented")
+func (UnimplementedBackendRequestsServer) LoginNewUser(context.Context, *NewUserLoginRequest) (*NewUserLoginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LoginNewUser not implemented")
+}
+func (UnimplementedBackendRequestsServer) ValidateToken(context.Context, *ValidateTokenRequest) (*ValidateTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateToken not implemented")
+}
+func (UnimplementedBackendRequestsServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RefreshToken not implemented")
 }
 func (UnimplementedBackendRequestsServer) VerifyUserToken(context.Context, *VerifyUserRequest) (*VerifyUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyUserToken not implemented")
@@ -118,20 +150,56 @@ func RegisterBackendRequestsServer(s grpc.ServiceRegistrar, srv BackendRequestsS
 	s.RegisterService(&BackendRequests_ServiceDesc, srv)
 }
 
-func _BackendRequests_LoginUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UserLoginRequest)
+func _BackendRequests_LoginNewUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NewUserLoginRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(BackendRequestsServer).LoginUser(ctx, in)
+		return srv.(BackendRequestsServer).LoginNewUser(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BackendRequests_LoginUser_FullMethodName,
+		FullMethod: BackendRequests_LoginNewUser_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BackendRequestsServer).LoginUser(ctx, req.(*UserLoginRequest))
+		return srv.(BackendRequestsServer).LoginNewUser(ctx, req.(*NewUserLoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_ValidateToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).ValidateToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_ValidateToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).ValidateToken(ctx, req.(*ValidateTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_RefreshToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).RefreshToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_RefreshToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).RefreshToken(ctx, req.(*RefreshTokenRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -180,8 +248,16 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*BackendRequestsServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "loginUser",
-			Handler:    _BackendRequests_LoginUser_Handler,
+			MethodName: "loginNewUser",
+			Handler:    _BackendRequests_LoginNewUser_Handler,
+		},
+		{
+			MethodName: "validateToken",
+			Handler:    _BackendRequests_ValidateToken_Handler,
+		},
+		{
+			MethodName: "refreshToken",
+			Handler:    _BackendRequests_RefreshToken_Handler,
 		},
 		{
 			MethodName: "verifyUserToken",
@@ -193,5 +269,5 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "backendrequests.proto",
+	Metadata: "proto/backendrequests.proto",
 }

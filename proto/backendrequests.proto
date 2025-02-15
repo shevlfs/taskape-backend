@@ -5,18 +5,40 @@ package taskapebackend;
 option go_package = "./taskape-proto/";
 
 service BackendRequests {
-    rpc loginUser(UserLoginRequest) returns (UserLoginResponse) {}
+    rpc loginNewUser(NewUserLoginRequest) returns (NewUserLoginResponse) {}
+    rpc validateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {}
+    rpc refreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {}
     rpc verifyUserToken(VerifyUserRequest) returns (VerifyUserResponse) {}
     rpc registerNewProfile(RegisterNewProfileRequest) returns (RegisterNewProfileResponse) {}
 }
 
-message UserLoginRequest {
+message ValidateTokenRequest {
+    string token = 1;
+}
+
+message ValidateTokenResponse {
+    bool valid = 1;
+}
+
+message RefreshTokenRequest {
+    string token = 1;
+    string refresh_token = 2;
+    string phone = 3;
+}
+
+message RefreshTokenResponse {
+    string token = 1;
+    string refresh_token = 2;
+}
+
+message NewUserLoginRequest {
     string phone = 1;
 }
 
-message UserLoginResponse {
+message NewUserLoginResponse {
     string token = 1;
-    bool profile_exists = 2;
+    string refresh_token = 2;
+    bool profile_exists = 3;
 }
 
 message VerifyUserRequest {
