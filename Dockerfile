@@ -9,6 +9,7 @@ RUN apk add --no-cache protoc protobuf-dev
 COPY go.mod go.sum ./
 COPY taskape-proto/ ./taskape-proto/
 COPY main.go ./
+COPY .env ./
 COPY hello.proto ./
 
 # Download dependencies

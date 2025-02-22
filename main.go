@@ -11,6 +11,7 @@ import (
 	pb "taskape-server/proto"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
@@ -20,9 +21,10 @@ import (
 )
 
 var publicEndpoints = map[string]bool{
-	"/taskapebackend.BackendRequests/loginNewUser":  true,
-	"/taskapebackend.BackendRequests/validateToken": true,
-	"/taskapebackend.BackendRequests/refreshToken":  true,
+	"/taskapebackend.BackendRequests/loginNewUser":       true,
+	"/taskapebackend.BackendRequests/validateToken":      true,
+	"/taskapebackend.BackendRequests/refreshToken":       true,
+	"/taskapebackend.BackendRequests/registerNewProfile": false,
 }
 
 type server struct {
@@ -113,6 +115,68 @@ func (s *server) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequest) 
 	}, nil
 }
 
+func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProfileRequest) (*pb.RegisterNewProfileResponse, error) {
+	// Start a transaction
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	// Defer a rollback in case anything fails
+	defer tx.Rollback(ctx)
+
+	// Check if user exists by phone number
+
+	println("RegisterNewProfile called with phone: ", req.Phone)
+	var existingID int64
+	err = tx.QueryRow(ctx,
+		"SELECT id FROM users WHERE phone = $1",
+		req.Phone).Scan(&existingID)
+
+	if err == pgx.ErrNoRows {
+		// User doesn't exist, create new user
+		err = tx.QueryRow(ctx,
+			`INSERT INTO users (phone, handle, profile_picture, bio, color) 
+             VALUES ($1, $2, $3, $4, $5) 
+             RETURNING id`,
+			req.Phone,
+			req.Handle,
+			req.ProfilePicture,
+			req.Bio,
+			req.Color).Scan(&existingID)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert new user: %v", err)
+		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to query existing user: %v", err)
+	} else {
+		// User exists, update their information
+		_, err = tx.Exec(ctx,
+			`UPDATE users 
+             SET handle = $1, profile_picture = $2, bio = $3, color = $4
+             WHERE id = $5`,
+			req.Handle,
+			req.ProfilePicture,
+			req.Bio,
+			req.Color,
+			existingID)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to update existing user: %v", err)
+		}
+	}
+
+	// Commit the transaction
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.RegisterNewProfileResponse{
+		Success: true,
+		Id:      existingID,
+	}, nil
+}
+
 func (s *server) ValidateToken(ctx context.Context, req *pb.ValidateTokenRequest) (*pb.ValidateTokenResponse, error) {
 	token, err := jwt.Parse(req.Token, func(token *jwt.Token) (interface{}, error) {
 		return []byte(os.Getenv("JWT_SECRET")), nil
@@ -161,15 +225,17 @@ func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 		return handler(ctx, req)
 	}
 
-	print("authinterceptor is checking auth info\n")
+	print("authinterceptor is checking auth info:")
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
+		print("unauthenticated request rejected\n")
 		return nil, status.Errorf(codes.Unauthenticated, "no metadata")
 	}
 
-	values := md["authorization"]
+	values := md.Get("authorization")
 	if len(values) == 0 {
+		print("unauthenticated request rejected, no token\n")
 		return nil, status.Errorf(codes.Unauthenticated, "no auth token")
 	}
 
@@ -178,6 +244,7 @@ func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 	})
 
 	if err != nil || !token.Valid {
+		print("unauthenticated request rejected, invalid token\n")
 		return nil, status.Errorf(codes.Unauthenticated, "invalid token")
 	}
 	return handler(ctx, req)
