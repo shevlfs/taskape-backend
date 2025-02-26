@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"slices"
 	"time"
 
 	pb "taskape-server/proto"
@@ -23,11 +24,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var publicEndpoints = map[string]bool{
-	"/taskapebackend.BackendRequests/loginNewUser":       true,
-	"/taskapebackend.BackendRequests/validateToken":      true,
-	"/taskapebackend.BackendRequests/refreshToken":       true,
-	"/taskapebackend.BackendRequests/registerNewProfile": false,
+var publicEndpoints = []string{
+	"/taskapebackend.BackendRequests/loginNewUser",
+	"/taskapebackend.BackendRequests/validateToken",
+	"/taskapebackend.BackendRequests/refreshToken",
 }
 
 type server struct {
@@ -306,14 +306,14 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 			deadline = &t
 		}
 
-		assignedToJSON, err := json.Marshal(task.AssignedTo)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
+		assignedTo := task.AssignedTo
+		if assignedTo == nil {
+			assignedTo = []string{}
 		}
 
-		exceptIDsJSON, err := json.Marshal(task.Privacy.ExceptIds)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
+		privacyExceptIds := task.Privacy.ExceptIds
+		if privacyExceptIds == nil {
+			privacyExceptIds = []string{}
 		}
 
 		_, err = tx.Exec(ctx, `
@@ -332,14 +332,14 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 			task.Author,
 			task.Group,
 			task.GroupId,
-			assignedToJSON,
+			assignedTo,
 			task.TaskDifficulty,
 			task.CustomHours,
 			task.MentionedInEvent,
 			task.Completion.IsCompleted,
 			task.Completion.ProofUrl,
 			task.Privacy.Level,
-			exceptIDsJSON,
+			privacyExceptIds,
 		)
 
 		if err != nil {
@@ -458,7 +458,7 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
 
 func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	println(info.FullMethod)
-	if publicEndpoints[info.FullMethod] {
+	if slices.Contains(publicEndpoints, info.FullMethod) {
 		return handler(ctx, req)
 	}
 
