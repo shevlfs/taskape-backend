@@ -14,10 +14,19 @@ service BackendRequests {
     rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {}
     rpc CreateTasksBatch(CreateTasksBatchRequest) returns (CreateTasksBatchResponse) {}
     rpc GetUserTasks(GetUserTasksRequest) returns (GetUserTasksResponse) {}
+    rpc CheckHandleAvailability(CheckHandleRequest) returns (CheckHandleResponse) {}
 }
 
 message ValidateTokenRequest {
     string token = 1;
+}
+
+message CheckHandleRequest {
+    string handle = 1;
+}
+
+message CheckHandleResponse {
+    bool available = 1;
 }
 
 message ValidateTokenResponse {

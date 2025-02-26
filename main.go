@@ -40,6 +40,23 @@ type TokenPair struct {
 	RefreshToken string
 }
 
+func (s *server) CheckHandleAvailability(ctx context.Context, req *pb.CheckHandleRequest) (*pb.CheckHandleResponse, error) {
+	if req.Handle == "" {
+		return nil, fmt.Errorf("handle cannot be empty")
+	}
+
+	var exists bool
+	err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE handle = $1)", req.Handle).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check handle availability: %v", err)
+	}
+	println(exists)
+
+	return &pb.CheckHandleResponse{
+		Available: !exists,
+	}, nil
+}
+
 func generateTokens(phone string) (*TokenPair, error) {
 	secretKey := os.Getenv("JWT_SECRET")
 	if secretKey == "" {
@@ -130,6 +147,7 @@ func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProf
 	err = tx.QueryRow(ctx,
 		"SELECT id FROM users WHERE phone = $1",
 		req.Phone).Scan(&existingID)
+	
 
 	if err == pgx.ErrNoRows {
 		err = tx.QueryRow(ctx,

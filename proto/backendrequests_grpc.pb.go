@@ -19,14 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BackendRequests_LoginNewUser_FullMethodName       = "/taskapebackend.BackendRequests/loginNewUser"
-	BackendRequests_ValidateToken_FullMethodName      = "/taskapebackend.BackendRequests/validateToken"
-	BackendRequests_RefreshToken_FullMethodName       = "/taskapebackend.BackendRequests/refreshToken"
-	BackendRequests_VerifyUserToken_FullMethodName    = "/taskapebackend.BackendRequests/verifyUserToken"
-	BackendRequests_RegisterNewProfile_FullMethodName = "/taskapebackend.BackendRequests/registerNewProfile"
-	BackendRequests_CreateTask_FullMethodName         = "/taskapebackend.BackendRequests/CreateTask"
-	BackendRequests_CreateTasksBatch_FullMethodName   = "/taskapebackend.BackendRequests/CreateTasksBatch"
-	BackendRequests_GetUserTasks_FullMethodName       = "/taskapebackend.BackendRequests/GetUserTasks"
+	BackendRequests_LoginNewUser_FullMethodName            = "/taskapebackend.BackendRequests/loginNewUser"
+	BackendRequests_ValidateToken_FullMethodName           = "/taskapebackend.BackendRequests/validateToken"
+	BackendRequests_RefreshToken_FullMethodName            = "/taskapebackend.BackendRequests/refreshToken"
+	BackendRequests_VerifyUserToken_FullMethodName         = "/taskapebackend.BackendRequests/verifyUserToken"
+	BackendRequests_RegisterNewProfile_FullMethodName      = "/taskapebackend.BackendRequests/registerNewProfile"
+	BackendRequests_CreateTask_FullMethodName              = "/taskapebackend.BackendRequests/CreateTask"
+	BackendRequests_CreateTasksBatch_FullMethodName        = "/taskapebackend.BackendRequests/CreateTasksBatch"
+	BackendRequests_GetUserTasks_FullMethodName            = "/taskapebackend.BackendRequests/GetUserTasks"
+	BackendRequests_CheckHandleAvailability_FullMethodName = "/taskapebackend.BackendRequests/CheckHandleAvailability"
 )
 
 // BackendRequestsClient is the client API for BackendRequests service.
@@ -41,6 +42,7 @@ type BackendRequestsClient interface {
 	CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*CreateTaskResponse, error)
 	CreateTasksBatch(ctx context.Context, in *CreateTasksBatchRequest, opts ...grpc.CallOption) (*CreateTasksBatchResponse, error)
 	GetUserTasks(ctx context.Context, in *GetUserTasksRequest, opts ...grpc.CallOption) (*GetUserTasksResponse, error)
+	CheckHandleAvailability(ctx context.Context, in *CheckHandleRequest, opts ...grpc.CallOption) (*CheckHandleResponse, error)
 }
 
 type backendRequestsClient struct {
@@ -131,6 +133,16 @@ func (c *backendRequestsClient) GetUserTasks(ctx context.Context, in *GetUserTas
 	return out, nil
 }
 
+func (c *backendRequestsClient) CheckHandleAvailability(ctx context.Context, in *CheckHandleRequest, opts ...grpc.CallOption) (*CheckHandleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckHandleResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_CheckHandleAvailability_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendRequestsServer is the server API for BackendRequests service.
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
@@ -143,6 +155,7 @@ type BackendRequestsServer interface {
 	CreateTask(context.Context, *CreateTaskRequest) (*CreateTaskResponse, error)
 	CreateTasksBatch(context.Context, *CreateTasksBatchRequest) (*CreateTasksBatchResponse, error)
 	GetUserTasks(context.Context, *GetUserTasksRequest) (*GetUserTasksResponse, error)
+	CheckHandleAvailability(context.Context, *CheckHandleRequest) (*CheckHandleResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
 }
 
@@ -176,6 +189,9 @@ func (UnimplementedBackendRequestsServer) CreateTasksBatch(context.Context, *Cre
 }
 func (UnimplementedBackendRequestsServer) GetUserTasks(context.Context, *GetUserTasksRequest) (*GetUserTasksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserTasks not implemented")
+}
+func (UnimplementedBackendRequestsServer) CheckHandleAvailability(context.Context, *CheckHandleRequest) (*CheckHandleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckHandleAvailability not implemented")
 }
 func (UnimplementedBackendRequestsServer) mustEmbedUnimplementedBackendRequestsServer() {}
 func (UnimplementedBackendRequestsServer) testEmbeddedByValue()                         {}
@@ -342,6 +358,24 @@ func _BackendRequests_GetUserTasks_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_CheckHandleAvailability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckHandleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).CheckHandleAvailability(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_CheckHandleAvailability_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).CheckHandleAvailability(ctx, req.(*CheckHandleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendRequests_ServiceDesc is the grpc.ServiceDesc for BackendRequests service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -380,6 +414,10 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserTasks",
 			Handler:    _BackendRequests_GetUserTasks_Handler,
+		},
+		{
+			MethodName: "CheckHandleAvailability",
+			Handler:    _BackendRequests_CheckHandleAvailability_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
