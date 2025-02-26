@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +12,7 @@ import (
 	pb "taskape-server/proto"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -18,6 +20,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var publicEndpoints = map[string]bool{
@@ -116,15 +119,11 @@ func (s *server) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequest) 
 }
 
 func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProfileRequest) (*pb.RegisterNewProfileResponse, error) {
-	// Start a transaction
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %v", err)
 	}
-	// Defer a rollback in case anything fails
 	defer tx.Rollback(ctx)
-
-	// Check if user exists by phone number
 
 	println("RegisterNewProfile called with phone: ", req.Phone)
 	var existingID int64
@@ -133,7 +132,6 @@ func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProf
 		req.Phone).Scan(&existingID)
 
 	if err == pgx.ErrNoRows {
-		// User doesn't exist, create new user
 		err = tx.QueryRow(ctx,
 			`INSERT INTO users (phone, handle, profile_picture, bio, color) 
              VALUES ($1, $2, $3, $4, $5) 
@@ -150,7 +148,6 @@ func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProf
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to query existing user: %v", err)
 	} else {
-		// User exists, update their information
 		_, err = tx.Exec(ctx,
 			`UPDATE users 
              SET handle = $1, profile_picture = $2, bio = $3, color = $4
@@ -166,7 +163,6 @@ func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProf
 		}
 	}
 
-	// Commit the transaction
 	if err = tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
@@ -216,6 +212,247 @@ func (s *server) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest) 
 	return &pb.RefreshTokenResponse{
 		Token:        newTokens.AccessToken,
 		RefreshToken: newTokens.RefreshToken,
+	}, nil
+}
+
+func (s *server) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb.CreateTaskResponse, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	taskID := req.Task.Id
+	if taskID == "" {
+		taskID = uuid.New().String()
+	}
+
+	var deadline *time.Time
+	if req.Task.Deadline != nil {
+		t := req.Task.Deadline.AsTime()
+		deadline = &t
+	}
+
+	assignedToJSON, err := json.Marshal(req.Task.AssignedTo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
+	}
+
+	exceptIDsJSON, err := json.Marshal(req.Task.Privacy.ExceptIds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+        INSERT INTO tasks (
+            id, user_id, name, description, deadline, author, "group", group_id, 
+            assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+            is_completed, proof_url, privacy_level, privacy_except_ids
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+        )`,
+		taskID,
+		req.Task.UserId,
+		req.Task.Name,
+		req.Task.Description,
+		deadline,
+		req.Task.Author,
+		req.Task.Group,
+		req.Task.GroupId,
+		assignedToJSON,
+		req.Task.TaskDifficulty,
+		req.Task.CustomHours,
+		req.Task.MentionedInEvent,
+		req.Task.Completion.IsCompleted,
+		req.Task.Completion.ProofUrl,
+		req.Task.Privacy.Level,
+		exceptIDsJSON,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert task: %v", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.CreateTaskResponse{
+		Success: true,
+		TaskId:  taskID,
+	}, nil
+}
+
+func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchRequest) (*pb.CreateTasksBatchResponse, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	taskIDs := make([]string, len(req.Tasks))
+
+	for i, task := range req.Tasks {
+		taskID := task.Id
+		if taskID == "" {
+			taskID = uuid.New().String()
+		}
+		taskIDs[i] = taskID
+
+		var deadline *time.Time
+		if task.Deadline != nil {
+			t := task.Deadline.AsTime()
+			deadline = &t
+		}
+
+		assignedToJSON, err := json.Marshal(task.AssignedTo)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
+		}
+
+		exceptIDsJSON, err := json.Marshal(task.Privacy.ExceptIds)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
+		}
+
+		_, err = tx.Exec(ctx, `
+            INSERT INTO tasks (
+                id, user_id, name, description, deadline, author, "group", group_id, 
+                assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+                is_completed, proof_url, privacy_level, privacy_except_ids
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+            )`,
+			taskID,
+			task.UserId,
+			task.Name,
+			task.Description,
+			deadline,
+			task.Author,
+			task.Group,
+			task.GroupId,
+			assignedToJSON,
+			task.TaskDifficulty,
+			task.CustomHours,
+			task.MentionedInEvent,
+			task.Completion.IsCompleted,
+			task.Completion.ProofUrl,
+			task.Privacy.Level,
+			exceptIDsJSON,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert task %d: %v", i, err)
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.CreateTasksBatchResponse{
+		Success: true,
+		TaskIds: taskIDs,
+	}, nil
+}
+
+func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) (*pb.GetUserTasksResponse, error) {
+	rows, err := s.pool.Query(ctx, `
+        SELECT 
+            id, user_id, name, description, created_at, deadline, author, "group", group_id,
+            assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+            is_completed, proof_url, privacy_level, privacy_except_ids
+        FROM tasks
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+    `, req.UserId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tasks: %v", err)
+	}
+	defer rows.Close()
+
+	var tasks []*pb.Task
+	for rows.Next() {
+		var (
+			id, userID, name, description, author, group, groupID, taskDifficulty, privacyLevel string
+			createdAt                                                                           time.Time
+			deadlinePtr                                                                         *time.Time
+			assignedToJSON, exceptIDsJSON                                                       []byte
+			customHours                                                                         int32
+			customHoursPtr                                                                      *int32
+			mentionedInEvent, isCompleted                                                       bool
+			proofURL                                                                            string
+			proofURLPtr                                                                         *string
+		)
+
+		err := rows.Scan(
+			&id, &userID, &name, &description, &createdAt, &deadlinePtr, &author, &group, &groupID,
+			&assignedToJSON, &taskDifficulty, &customHoursPtr, &mentionedInEvent,
+			&isCompleted, &proofURLPtr, &privacyLevel, &exceptIDsJSON,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task row: %v", err)
+		}
+
+		var assignedTo, exceptIDs []string
+		if err := json.Unmarshal(assignedToJSON, &assignedTo); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal assigned_to: %v", err)
+		}
+		if err := json.Unmarshal(exceptIDsJSON, &exceptIDs); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal privacy_except_ids: %v", err)
+		}
+
+		createdAtProto := timestamppb.New(createdAt)
+		var deadlineProto *timestamppb.Timestamp
+		if deadlinePtr != nil {
+			deadlineProto = timestamppb.New(*deadlinePtr)
+		}
+
+		if customHoursPtr != nil {
+			customHours = *customHoursPtr
+		}
+
+		if proofURLPtr != nil {
+			proofURL = *proofURLPtr
+		}
+
+		task := &pb.Task{
+			Id:               id,
+			UserId:           userID,
+			Name:             name,
+			Description:      description,
+			CreatedAt:        createdAtProto,
+			Deadline:         deadlineProto,
+			Author:           author,
+			Group:            group,
+			GroupId:          groupID,
+			AssignedTo:       assignedTo,
+			TaskDifficulty:   taskDifficulty,
+			CustomHours:      customHours,
+			MentionedInEvent: mentionedInEvent,
+			Completion: &pb.CompletionStatus{
+				IsCompleted: isCompleted,
+				ProofUrl:    proofURL,
+			},
+			Privacy: &pb.PrivacySettings{
+				Level:     privacyLevel,
+				ExceptIds: exceptIDs,
+			},
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating task rows: %v", err)
+	}
+
+	return &pb.GetUserTasksResponse{
+		Success: true,
+		Tasks:   tasks,
 	}, nil
 }
 

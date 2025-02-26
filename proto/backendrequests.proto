@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package taskapebackend;
+import "google/protobuf/timestamp.proto";
 
 option go_package = "./taskape-proto/";
 
@@ -10,6 +11,9 @@ service BackendRequests {
     rpc refreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {}
     rpc verifyUserToken(VerifyUserRequest) returns (VerifyUserResponse) {}
     rpc registerNewProfile(RegisterNewProfileRequest) returns (RegisterNewProfileResponse) {}
+    rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {}
+    rpc CreateTasksBatch(CreateTasksBatchRequest) returns (CreateTasksBatchResponse) {}
+    rpc GetUserTasks(GetUserTasksRequest) returns (GetUserTasksResponse) {}
 }
 
 message ValidateTokenRequest {
@@ -61,4 +65,62 @@ message RegisterNewProfileRequest {
 message RegisterNewProfileResponse {
     bool success=1;
     int64 id=2;
+}
+
+message Task {
+  string id = 1;
+  string user_id = 2;
+  string name = 3;
+  string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp deadline = 6;
+  string author = 7;
+  string group = 8;
+  string group_id = 9;
+  repeated string assigned_to = 10;
+  string task_difficulty = 11;
+  int32 custom_hours = 12;
+  bool mentioned_in_event = 13;
+  CompletionStatus completion = 14;
+  PrivacySettings privacy = 15;
+}
+
+message CompletionStatus {
+  bool is_completed = 1;
+  string proof_url = 2;
+}
+
+message PrivacySettings {
+  string level = 1;
+  repeated string except_ids = 2;
+}
+
+message CreateTaskRequest {
+  Task task = 1;
+}
+
+message CreateTaskResponse {
+  bool success = 1;
+  string task_id = 2;
+  string error = 3;
+}
+
+message CreateTasksBatchRequest {
+  repeated Task tasks = 1;
+}
+
+message CreateTasksBatchResponse {
+  bool success = 1;
+  repeated string task_ids = 2;
+  string error = 3;
+}
+
+message GetUserTasksRequest {
+  string user_id = 1;
+}
+
+message GetUserTasksResponse {
+  bool success = 1;
+  repeated Task tasks = 2;
+  string error = 3;
 }
