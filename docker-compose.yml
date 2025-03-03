@@ -1,0 +1,41 @@
+services:
+  grpc-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "50051:50051"
+    volumes:
+      - .:/app
+    environment:
+      - ENV=development
+      - DEBUG=true
+      - DB_HOST=postgres
+      - DB_USER=taskape
+      - DB_PASSWORD=cBfN6qYiz6HCwIa
+      - DB_NAME=taskape
+      - DB_PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: go run main.go
+      # Changed from server/main.go to main.go
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=taskape
+      - POSTGRES_PASSWORD=cBfN6qYiz6HCwIa
+      - POSTGRES_DB=taskape
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U taskape" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
