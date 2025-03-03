@@ -28,6 +28,7 @@ const (
 	BackendRequests_CreateTasksBatch_FullMethodName        = "/taskapebackend.BackendRequests/CreateTasksBatch"
 	BackendRequests_GetUserTasks_FullMethodName            = "/taskapebackend.BackendRequests/GetUserTasks"
 	BackendRequests_CheckHandleAvailability_FullMethodName = "/taskapebackend.BackendRequests/CheckHandleAvailability"
+	BackendRequests_GetUser_FullMethodName                 = "/taskapebackend.BackendRequests/GetUser"
 )
 
 // BackendRequestsClient is the client API for BackendRequests service.
@@ -43,6 +44,7 @@ type BackendRequestsClient interface {
 	CreateTasksBatch(ctx context.Context, in *CreateTasksBatchRequest, opts ...grpc.CallOption) (*CreateTasksBatchResponse, error)
 	GetUserTasks(ctx context.Context, in *GetUserTasksRequest, opts ...grpc.CallOption) (*GetUserTasksResponse, error)
 	CheckHandleAvailability(ctx context.Context, in *CheckHandleRequest, opts ...grpc.CallOption) (*CheckHandleResponse, error)
+	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
 }
 
 type backendRequestsClient struct {
@@ -143,6 +145,16 @@ func (c *backendRequestsClient) CheckHandleAvailability(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *backendRequestsClient) GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendRequestsServer is the server API for BackendRequests service.
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
@@ -156,6 +168,7 @@ type BackendRequestsServer interface {
 	CreateTasksBatch(context.Context, *CreateTasksBatchRequest) (*CreateTasksBatchResponse, error)
 	GetUserTasks(context.Context, *GetUserTasksRequest) (*GetUserTasksResponse, error)
 	CheckHandleAvailability(context.Context, *CheckHandleRequest) (*CheckHandleResponse, error)
+	GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
 }
 
@@ -192,6 +205,9 @@ func (UnimplementedBackendRequestsServer) GetUserTasks(context.Context, *GetUser
 }
 func (UnimplementedBackendRequestsServer) CheckHandleAvailability(context.Context, *CheckHandleRequest) (*CheckHandleResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckHandleAvailability not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUser not implemented")
 }
 func (UnimplementedBackendRequestsServer) mustEmbedUnimplementedBackendRequestsServer() {}
 func (UnimplementedBackendRequestsServer) testEmbeddedByValue()                         {}
@@ -376,6 +392,24 @@ func _BackendRequests_CheckHandleAvailability_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_GetUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUser(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUser_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUser(ctx, req.(*GetUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendRequests_ServiceDesc is the grpc.ServiceDesc for BackendRequests service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -418,6 +452,10 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckHandleAvailability",
 			Handler:    _BackendRequests_CheckHandleAvailability_Handler,
+		},
+		{
+			MethodName: "GetUser",
+			Handler:    _BackendRequests_GetUser_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

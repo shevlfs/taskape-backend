@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	pb "taskape-server/proto"
@@ -96,6 +97,49 @@ func generateTokens(phone string) (*TokenPair, error) {
 	}, nil
 }
 
+func (s *server) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+	if req.UserId == "" {
+		return &pb.GetUserResponse{
+			Success: false,
+			Error:   "User ID is required",
+		}, nil
+	}
+
+	var id int64
+	var handle, bio, profilePicture, color string
+
+	userId, err := strconv.ParseInt(req.UserId, 10, 64)
+	if err != nil {
+		return &pb.GetUserResponse{
+			Success: false,
+			Error:   "Invalid user ID format",
+		}, nil
+	}
+
+	err = s.pool.QueryRow(ctx,
+		"SELECT id, handle, bio, profile_picture, color FROM users WHERE id = $1",
+		userId).Scan(&id, &handle, &bio, &profilePicture, &color)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return &pb.GetUserResponse{
+				Success: false,
+				Error:   "User not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to query user: %v", err)
+	}
+
+	return &pb.GetUserResponse{
+		Success:        true,
+		Id:             fmt.Sprintf("%d", id),
+		Handle:         handle,
+		Bio:            bio,
+		ProfilePicture: profilePicture,
+		Color:          color,
+	}, nil
+}
+
 func (s *server) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequest) (*pb.NewUserLoginResponse, error) {
 	print("LoginNewUser called with phone: ", req.Phone)
 	tx, err := s.pool.Begin(ctx)
@@ -110,11 +154,16 @@ func (s *server) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("database query failed: %v", err)
 	}
-
+	var existingID int64 = -1
 	if !profileExists {
 		_, err = tx.Exec(ctx, "INSERT INTO users (phone) VALUES ($1)", req.Phone)
 		if err != nil {
 			return nil, fmt.Errorf("insert failed: %v", err)
+		}
+	} else {
+		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user ID: %v", err)
 		}
 	}
 
@@ -132,6 +181,7 @@ func (s *server) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequest) 
 		Token:         tokens.AccessToken,
 		RefreshToken:  tokens.RefreshToken,
 		ProfileExists: profileExists,
+		UserId:        existingID,
 	}, nil
 }
 
@@ -147,7 +197,6 @@ func (s *server) RegisterNewProfile(ctx context.Context, req *pb.RegisterNewProf
 	err = tx.QueryRow(ctx,
 		"SELECT id FROM users WHERE phone = $1",
 		req.Phone).Scan(&existingID)
-	
 
 	if err == pgx.ErrNoRows {
 		err = tx.QueryRow(ctx,

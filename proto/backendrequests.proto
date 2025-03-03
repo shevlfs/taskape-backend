@@ -15,6 +15,7 @@ service BackendRequests {
     rpc CreateTasksBatch(CreateTasksBatchRequest) returns (CreateTasksBatchResponse) {}
     rpc GetUserTasks(GetUserTasksRequest) returns (GetUserTasksResponse) {}
     rpc CheckHandleAvailability(CheckHandleRequest) returns (CheckHandleResponse) {}
+    rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
 }
 
 message ValidateTokenRequest {
@@ -52,6 +53,7 @@ message NewUserLoginResponse {
     string token = 1;
     string refresh_token = 2;
     bool profile_exists = 3;
+     int64 user_id = 4;
 }
 
 message VerifyUserRequest {
@@ -132,4 +134,18 @@ message GetUserTasksResponse {
   bool success = 1;
   repeated Task tasks = 2;
   string error = 3;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  bool success = 1;
+  string id = 2;
+  string handle = 3;
+  string bio = 4;
+  string profile_picture = 5;
+  string color = 6;
+  string error = 7;
 }
