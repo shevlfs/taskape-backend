@@ -1,0 +1,19 @@
+FROM golang:1.24-alpine
+
+WORKDIR /app
+
+# Install air for hot reloading
+RUN go install github.com/cosmtrek/air@latest
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# We'll mount the source code as a volume
+
+# Create .air.toml config file
+RUN echo '[build]\ncmd = "go build -o ./tmp/main ."\nbin = "./tmp/main"\nfull_bin = "./tmp/main"' > .air.toml
+
+EXPOSE 50051
+
+CMD ["air", "-c", ".air.toml"]

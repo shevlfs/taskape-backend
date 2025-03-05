@@ -1,24 +1,30 @@
-FROM golang:1.23-alpine
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Install protoc and essential build tools
-RUN apk add --no-cache protoc protobuf-dev
-
-# Copy everything needed for building
+# Copy go mod and sum files
 COPY go.mod go.sum ./
-COPY taskape-proto/ ./taskape-proto/
-COPY main.go ./
-COPY .env ./
-COPY hello.proto ./
 
 # Download dependencies
 RUN go mod download
 
-# Build the application
-RUN go build -o server main.go
+# Copy source code
+COPY . .
 
-# Expose gRPC port
+# Build the application
+RUN go build -o taskape-backend .
+
+FROM alpine:latest
+
+WORKDIR /app
+
+# Copy the binary from builder
+COPY --from=builder /app/taskape-backend .
+# Copy .env file for configuration
+COPY .env ./
+
+# Expose port
 EXPOSE 50051
 
-CMD ["/app/server"]
+# Command to run
+CMD ["./taskape-backend"]

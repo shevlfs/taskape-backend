@@ -1,4 +1,4 @@
-module taskape-server
+module taskape-backend
 
 go 1.23.4
 

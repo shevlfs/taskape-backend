@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	pb "taskape-server/proto"
+	pb "taskape-backend/proto"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -427,18 +427,18 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 }
 
 func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) (*pb.GetUserTasksResponse, error) {
-    log.Printf("GetUserTasks called for user ID: %s", req.UserId)
-    
-    if req.UserId == "" {
-        log.Printf("ERROR: Empty user ID provided")
-        return &pb.GetUserTasksResponse{
-            Success: false,
-            Error:   "User ID cannot be empty",
-        }, nil
-    }
+	log.Printf("GetUserTasks called for user ID: %s", req.UserId)
 
-    // Query the database
-    rows, err := s.pool.Query(ctx, `
+	if req.UserId == "" {
+		log.Printf("ERROR: Empty user ID provided")
+		return &pb.GetUserTasksResponse{
+			Success: false,
+			Error:   "User ID cannot be empty",
+		}, nil
+	}
+
+	// Query the database
+	rows, err := s.pool.Query(ctx, `
         SELECT 
             id, user_id, name, description, created_at, deadline, author, "group", group_id,
             assigned_to, task_difficulty, custom_hours, mentioned_in_event,
@@ -448,98 +448,98 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
         ORDER BY created_at DESC
     `, req.UserId)
 
-    if err != nil {
-        log.Printf("ERROR querying tasks for user %s: %v", req.UserId, err)
-        return &pb.GetUserTasksResponse{
-            Success: false,
-            Error:   fmt.Sprintf("Failed to query tasks: %v", err),
-        }, nil
-    }
-    defer rows.Close()
+	if err != nil {
+		log.Printf("ERROR querying tasks for user %s: %v", req.UserId, err)
+		return &pb.GetUserTasksResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Failed to query tasks: %v", err),
+		}, nil
+	}
+	defer rows.Close()
 
-    var tasks []*pb.Task
-    for rows.Next() {
-        var (
-            id, userID, name, description, author, group, groupID, taskDifficulty, privacyLevel string
-            createdAt                                                                           time.Time
-            deadlinePtr                                                                         *time.Time
-            // Change these from []byte to []string to match the PostgreSQL TEXT[] type
-            assignedTo, exceptIDs                                                               []string
-            customHours                                                                         int32
-            customHoursPtr                                                                      *int32
-            mentionedInEvent, isCompleted                                                       bool
-            proofURL                                                                            string
-            proofURLPtr                                                                         *string
-        )
+	var tasks []*pb.Task
+	for rows.Next() {
+		var (
+			id, userID, name, description, author, group, groupID, taskDifficulty, privacyLevel string
+			createdAt                                                                           time.Time
+			deadlinePtr                                                                         *time.Time
+			// Change these from []byte to []string to match the PostgreSQL TEXT[] type
+			assignedTo, exceptIDs         []string
+			customHours                   int32
+			customHoursPtr                *int32
+			mentionedInEvent, isCompleted bool
+			proofURL                      string
+			proofURLPtr                   *string
+		)
 
-        err := rows.Scan(
-            &id, &userID, &name, &description, &createdAt, &deadlinePtr, &author, &group, &groupID,
-            &assignedTo, &taskDifficulty, &customHoursPtr, &mentionedInEvent,
-            &isCompleted, &proofURLPtr, &privacyLevel, &exceptIDs,
-        )
-        if err != nil {
-            log.Printf("ERROR scanning task row: %v", err)
-            return &pb.GetUserTasksResponse{
-                Success: false,
-                Error:   fmt.Sprintf("Failed to scan task row: %v", err),
-            }, nil
-        }
+		err := rows.Scan(
+			&id, &userID, &name, &description, &createdAt, &deadlinePtr, &author, &group, &groupID,
+			&assignedTo, &taskDifficulty, &customHoursPtr, &mentionedInEvent,
+			&isCompleted, &proofURLPtr, &privacyLevel, &exceptIDs,
+		)
+		if err != nil {
+			log.Printf("ERROR scanning task row: %v", err)
+			return &pb.GetUserTasksResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Failed to scan task row: %v", err),
+			}, nil
+		}
 
-        createdAtProto := timestamppb.New(createdAt)
-        var deadlineProto *timestamppb.Timestamp
-        if deadlinePtr != nil {
-            deadlineProto = timestamppb.New(*deadlinePtr)
-        }
+		createdAtProto := timestamppb.New(createdAt)
+		var deadlineProto *timestamppb.Timestamp
+		if deadlinePtr != nil {
+			deadlineProto = timestamppb.New(*deadlinePtr)
+		}
 
-        if customHoursPtr != nil {
-            customHours = *customHoursPtr
-        }
+		if customHoursPtr != nil {
+			customHours = *customHoursPtr
+		}
 
-        if proofURLPtr != nil {
-            proofURL = *proofURLPtr
-        }
+		if proofURLPtr != nil {
+			proofURL = *proofURLPtr
+		}
 
-        // Now we can directly use assignedTo and exceptIDs (they're already string arrays)
-        task := &pb.Task{
-            Id:               id,
-            UserId:           userID,
-            Name:             name,
-            Description:      description,
-            CreatedAt:        createdAtProto,
-            Deadline:         deadlineProto,
-            Author:           author,
-            Group:            group,
-            GroupId:          groupID,
-            AssignedTo:       assignedTo, // No need to unmarshal, it's already a string array
-            TaskDifficulty:   taskDifficulty,
-            CustomHours:      customHours,
-            MentionedInEvent: mentionedInEvent,
-            Completion: &pb.CompletionStatus{
-                IsCompleted: isCompleted,
-                ProofUrl:    proofURL,
-            },
-            Privacy: &pb.PrivacySettings{
-                Level:     privacyLevel,
-                ExceptIds: exceptIDs, // No need to unmarshal, it's already a string array
-            },
-        }
+		// Now we can directly use assignedTo and exceptIDs (they're already string arrays)
+		task := &pb.Task{
+			Id:               id,
+			UserId:           userID,
+			Name:             name,
+			Description:      description,
+			CreatedAt:        createdAtProto,
+			Deadline:         deadlineProto,
+			Author:           author,
+			Group:            group,
+			GroupId:          groupID,
+			AssignedTo:       assignedTo, // No need to unmarshal, it's already a string array
+			TaskDifficulty:   taskDifficulty,
+			CustomHours:      customHours,
+			MentionedInEvent: mentionedInEvent,
+			Completion: &pb.CompletionStatus{
+				IsCompleted: isCompleted,
+				ProofUrl:    proofURL,
+			},
+			Privacy: &pb.PrivacySettings{
+				Level:     privacyLevel,
+				ExceptIds: exceptIDs, // No need to unmarshal, it's already a string array
+			},
+		}
 
-        tasks = append(tasks, task)
-    }
+		tasks = append(tasks, task)
+	}
 
-    if err := rows.Err(); err != nil {
-        log.Printf("ERROR iterating task rows: %v", err)
-        return &pb.GetUserTasksResponse{
-            Success: false,
-            Error:   fmt.Sprintf("Error iterating task rows: %v", err),
-        }, nil
-    }
+	if err := rows.Err(); err != nil {
+		log.Printf("ERROR iterating task rows: %v", err)
+		return &pb.GetUserTasksResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Error iterating task rows: %v", err),
+		}, nil
+	}
 
-    log.Printf("Successfully fetched %d tasks for user %s", len(tasks), req.UserId)
-    return &pb.GetUserTasksResponse{
-        Success: true,
-        Tasks:   tasks,
-    }, nil
+	log.Printf("Successfully fetched %d tasks for user %s", len(tasks), req.UserId)
+	return &pb.GetUserTasksResponse{
+		Success: true,
+		Tasks:   tasks,
+	}, nil
 }
 
 func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
