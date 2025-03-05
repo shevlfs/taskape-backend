@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the backend
-RUN go build -o taskape-backend .
+RUN go build -mod=vendor -o taskape-backend .
 
 # --- Final stage ---
 FROM alpine:latest
