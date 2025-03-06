@@ -16,6 +16,7 @@ service BackendRequests {
     rpc GetUserTasks(GetUserTasksRequest) returns (GetUserTasksResponse) {}
     rpc CheckHandleAvailability(CheckHandleRequest) returns (CheckHandleResponse) {}
     rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
+    rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {}
 }
 
 message ValidateTokenRequest {
@@ -94,6 +95,15 @@ message Task {
   bool mentioned_in_event = 13;
   CompletionStatus completion = 14;
   PrivacySettings privacy = 15;
+}
+
+message UpdateTaskRequest {
+  Task task = 1;
+}
+
+message UpdateTaskResponse {
+  bool success = 1;
+  string error = 2;
 }
 
 message CompletionStatus {

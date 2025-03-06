@@ -425,6 +425,71 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 	}, nil
 }
 
+func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var deadline *time.Time
+	if req.Task.Deadline != nil {
+		t := req.Task.Deadline.AsTime()
+		deadline = &t
+	}
+
+	assignedToJSON, err := json.Marshal(req.Task.AssignedTo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
+	}
+
+	exceptIDsJSON, err := json.Marshal(req.Task.Privacy.ExceptIds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+        UPDATE tasks SET
+            name = $1,
+            description = $2,
+            deadline = $3,
+            assigned_to = $4,
+            task_difficulty = $5,
+            custom_hours = $6,
+            is_completed = $7,
+            proof_url = $8,
+            privacy_level = $9,
+            privacy_except_ids = $10
+        WHERE id = $11 AND user_id = $12
+    `,
+		req.Task.Name,
+		req.Task.Description,
+		deadline,
+		assignedToJSON,
+		req.Task.TaskDifficulty,
+		req.Task.CustomHours,
+		req.Task.Completion.IsCompleted,
+		req.Task.Completion.ProofUrl,
+		req.Task.Privacy.Level,
+		exceptIDsJSON,
+		req.Task.Id,
+		req.Task.UserId,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %v", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.UpdateTaskResponse{
+		Success: true,
+	}, nil
+}
+
 func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) (*pb.GetUserTasksResponse, error) {
 	log.Printf("GetUserTasks called for user ID: %s", req.UserId)
 
@@ -546,8 +611,6 @@ func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 	if slices.Contains(publicEndpoints, info.FullMethod) {
 		return handler(ctx, req)
 	}
-
-	print("authinterceptor is checking auth info:")
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
