@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	pb "taskape-backend/proto"
@@ -438,27 +439,15 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		deadline = &t
 	}
 
-	var assignedToJSON []byte
-	if len(req.Task.AssignedTo) == 0 {
-		assignedToJSON = []byte("[]") // or use pgx.NullJSONB
-	} else {
-		var err error
-		assignedToJSON, err = json.Marshal(req.Task.AssignedTo)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
-		}
+	assignedToArray := "{}" // Empty PostgreSQL array
+	if len(req.Task.AssignedTo) > 0 {
+		// Format as PostgreSQL text array: {element1,element2}
+		assignedToArray = fmt.Sprintf("{%s}", strings.Join(req.Task.AssignedTo, ","))
 	}
 
-	// Same for exceptIDs
-	var exceptIDsJSON []byte
-	if len(req.Task.Privacy.ExceptIds) == 0 {
-		exceptIDsJSON = []byte("[]") // or use pgx.NullJSONB
-	} else {
-		var err error
-		exceptIDsJSON, err = json.Marshal(req.Task.Privacy.ExceptIds)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
-		}
+	exceptIDsArray := "{}" // Empty PostgreSQL array
+	if len(req.Task.Privacy.ExceptIds) > 0 {
+		exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -466,25 +455,25 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
             name = $1,
             description = $2,
             deadline = $3,
-            assigned_to = $4,
+            assigned_to = $4::text[],
             task_difficulty = $5,
             custom_hours = $6,
             is_completed = $7,
             proof_url = $8,
             privacy_level = $9,
-            privacy_except_ids = $10
+            privacy_except_ids = $10::text[]
         WHERE id = $11 AND user_id = $12
     `,
 		req.Task.Name,
 		req.Task.Description,
 		deadline,
-		assignedToJSON,
+		assignedToArray,
 		req.Task.TaskDifficulty,
 		req.Task.CustomHours,
 		req.Task.Completion.IsCompleted,
 		req.Task.Completion.ProofUrl,
 		req.Task.Privacy.Level,
-		exceptIDsJSON,
+		exceptIDsArray,
 		req.Task.Id,
 		req.Task.UserId,
 	)
