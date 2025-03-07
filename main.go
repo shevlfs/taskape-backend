@@ -438,14 +438,27 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		deadline = &t
 	}
 
-	assignedToJSON, err := json.Marshal(req.Task.AssignedTo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
+	var assignedToJSON []byte
+	if len(req.Task.AssignedTo) == 0 {
+		assignedToJSON = []byte("[]") // or use pgx.NullJSONB
+	} else {
+		var err error
+		assignedToJSON, err = json.Marshal(req.Task.AssignedTo)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal assigned_to: %v", err)
+		}
 	}
 
-	exceptIDsJSON, err := json.Marshal(req.Task.Privacy.ExceptIds)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
+	// Same for exceptIDs
+	var exceptIDsJSON []byte
+	if len(req.Task.Privacy.ExceptIds) == 0 {
+		exceptIDsJSON = []byte("[]") // or use pgx.NullJSONB
+	} else {
+		var err error
+		exceptIDsJSON, err = json.Marshal(req.Task.Privacy.ExceptIds)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal privacy_except_ids: %v", err)
+		}
 	}
 
 	_, err = tx.Exec(ctx, `
