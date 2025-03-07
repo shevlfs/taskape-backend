@@ -450,6 +450,8 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
 	}
 
+	println("-- updating task", req.Task.Id)
+
 	_, err = tx.Exec(ctx, `
         UPDATE tasks SET
             name = $1,
