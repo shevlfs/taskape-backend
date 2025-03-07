@@ -445,27 +445,27 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		assignedToArray = fmt.Sprintf("{%s}", strings.Join(req.Task.AssignedTo, ","))
 	}
 
-	exceptIDsArray := "{}" // Empty PostgreSQL array
+	exceptIDsArray := "{}"
 	if len(req.Task.Privacy.ExceptIds) > 0 {
 		exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
 	}
 
 	println("-- updating task", req)
 
-	_, err = tx.Exec(ctx, `
-        UPDATE tasks SET
-            name = $1,
-            description = $2,
-            deadline = $3,
-            assigned_to = $4::text[],
-            task_difficulty = $5,
-            custom_hours = $6,
-            is_completed = $7,
-            proof_url = $8,
-            privacy_level = $9,
-            privacy_except_ids = $10::text[]
-        WHERE id = $11 AND user_id = $12
-    `,
+	result, err := tx.Exec(ctx, `
+	UPDATE tasks SET
+		name = $1,
+		description = $2,
+		deadline = $3,
+		assigned_to = $4,
+		task_difficulty = $5,
+		custom_hours = $6,
+		is_completed = $7,
+		proof_url = $8,
+		privacy_level = $9,
+		privacy_except_ids = $10
+	WHERE id = $11 AND user_id = $12
+`,
 		req.Task.Name,
 		req.Task.Description,
 		deadline,
@@ -484,6 +484,13 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 		return nil, fmt.Errorf("failed to update task: %v", err)
 	}
 
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return &pb.UpdateTaskResponse{
+			Success: false,
+			Error:   "No task found with the provided ID and user ID",
+		}, nil
+	}
 	err = tx.Commit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
