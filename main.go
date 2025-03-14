@@ -363,9 +363,6 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 
 	for i, task := range req.Tasks {
 		taskID := task.Id
-		if taskID == "" {
-			taskID = uuid.New().String()
-		}
 		taskIDs[i] = taskID
 
 		var deadline *time.Time
