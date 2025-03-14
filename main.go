@@ -448,7 +448,9 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
 	}
 
 	print("-- updating task", req.Task.Id)
-	print(" for user\n", req.Task.UserId)
+	print(" for user, ", req.Task.UserId)
+	print(" privacy level:", req.Task.Privacy)
+	print("\n")
 
 
 	result, err := tx.Exec(ctx, `
