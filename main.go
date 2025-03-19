@@ -97,6 +97,34 @@ func generateTokens(phone string) (*TokenPair, error) {
 	}, nil
 }
 
+func (s *server) UpdateTaskOrder(ctx context.Context, req *pb.UpdateTaskOrderRequest) (*pb.UpdateTaskOrderResponse, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, taskOrder := range req.Tasks {
+		_, err := tx.Exec(ctx, `
+            UPDATE tasks 
+            SET display_order = $1
+            WHERE id = $2 AND user_id = $3
+        `, taskOrder.DisplayOrder, taskOrder.TaskId, req.UserId)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to update task order: %v", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.UpdateTaskOrderResponse{
+		Success: true,
+	}, nil
+}
+
 func (s *server) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
 	if req.UserId == "" {
 		return &pb.GetUserResponse{
@@ -315,9 +343,11 @@ func (s *server) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb
         INSERT INTO tasks (
             id, user_id, name, description, deadline, author, "group", group_id, 
             assigned_to, task_difficulty, custom_hours, mentioned_in_event,
-            is_completed, proof_url, privacy_level, privacy_except_ids
+            is_completed, proof_url, privacy_level, privacy_except_ids,
+            flag_status, flag_color, flag_name, display_order
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+            $17, $18, $19, $20
         )`,
 		taskID,
 		req.Task.UserId,
@@ -335,6 +365,10 @@ func (s *server) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb
 		req.Task.Completion.ProofUrl,
 		req.Task.Privacy.Level,
 		exceptIDsJSON,
+		req.Task.FlagStatus,
+		req.Task.FlagColor,
+		req.Task.FlagName,
+		req.Task.DisplayOrder,
 	)
 
 	if err != nil {
@@ -424,82 +458,85 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 }
 
 func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback(ctx)
+    tx, err := s.pool.Begin(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("failed to begin transaction: %v", err)
+    }
+    defer tx.Rollback(ctx)
 
-	var deadline *time.Time
-	if req.Task.Deadline != nil {
-		t := req.Task.Deadline.AsTime()
-		deadline = &t
-	}
+    var deadline *time.Time
+    if req.Task.Deadline != nil {
+        t := req.Task.Deadline.AsTime()
+        deadline = &t
+    }
 
-	assignedToArray := "{}" // Empty PostgreSQL array
-	if len(req.Task.AssignedTo) > 0 {
-		// Format as PostgreSQL text array: {element1,element2}
-		assignedToArray = fmt.Sprintf("{%s}", strings.Join(req.Task.AssignedTo, ","))
-	}
+    assignedToArray := "{}" // Empty PostgreSQL array
+    if len(req.Task.AssignedTo) > 0 {
+        // Format as PostgreSQL text array: {element1,element2}
+        assignedToArray = fmt.Sprintf("{%s}", strings.Join(req.Task.AssignedTo, ","))
+    }
 
-	exceptIDsArray := "{}"
-	if len(req.Task.Privacy.ExceptIds) > 0 {
-		exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
-	}
+    exceptIDsArray := "{}"
+    if len(req.Task.Privacy.ExceptIds) > 0 {
+        exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
+    }
 
-	print("-- updating task", req.Task.Id)
-	print(" for user, ", req.Task.UserId)
-	print(" privacy level:", req.Task.Privacy)
-	print("\n")
+    result, err := tx.Exec(ctx, `
+    UPDATE tasks SET
+        name = $1,
+        description = $2,
+        deadline = $3,
+        assigned_to = $4,
+        task_difficulty = $5,
+        custom_hours = $6,
+        is_completed = $7,
+        proof_url = $8,
+        privacy_level = $9,
+        privacy_except_ids = $10,
+        flag_status = $11, 
+        flag_color = $12,
+        flag_name = $13,
+        display_order = $14
+    WHERE id = $15 AND user_id = $16
+    `,
+        req.Task.Name,
+        req.Task.Description,
+        deadline,
+        assignedToArray,
+        req.Task.TaskDifficulty,
+        req.Task.CustomHours,
+        req.Task.Completion.IsCompleted,
+        req.Task.Completion.ProofUrl,
+        req.Task.Privacy.Level,
+        exceptIDsArray,
+        req.Task.FlagStatus,
+        req.Task.FlagColor,
+        req.Task.FlagName,
+        req.Task.DisplayOrder,
+        req.Task.Id,
+        req.Task.UserId,
+    )
 
+    if err != nil {
+        return nil, fmt.Errorf("failed to update task: %v", err)
+    }
 
-	result, err := tx.Exec(ctx, `
-	UPDATE tasks SET
-		name = $1,
-		description = $2,
-		deadline = $3,
-		assigned_to = $4,
-		task_difficulty = $5,
-		custom_hours = $6,
-		is_completed = $7,
-		proof_url = $8,
-		privacy_level = $9,
-		privacy_except_ids = $10
-	WHERE id = $11 AND user_id = $12
-`,
-		req.Task.Name,
-		req.Task.Description,
-		deadline,
-		assignedToArray,
-		req.Task.TaskDifficulty,
-		req.Task.CustomHours,
-		req.Task.Completion.IsCompleted,
-		req.Task.Completion.ProofUrl,
-		req.Task.Privacy.Level,
-		exceptIDsArray,
-		req.Task.Id,
-		req.Task.UserId,
-	)
+    rowsAffected := result.RowsAffected()
+    if rowsAffected == 0 {
+        return &pb.UpdateTaskResponse{
+            Success: false,
+            Error:   "No task found with the provided ID and user ID",
+        }, nil
+    }
+    
+    err = tx.Commit(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("failed to commit transaction: %v", err)
+    }
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to update task: %v", err)
-	}
-
-	rowsAffected := result.RowsAffected()
-	if rowsAffected == 0 {
-		return &pb.UpdateTaskResponse{
-			Success: false,
-			Error:   "No task found with the provided ID and user ID",
-		}, nil
-	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %v", err)
-	}
-
-	return &pb.UpdateTaskResponse{
-		Success: true,
-	}, nil
+    return &pb.UpdateTaskResponse{
+        Success: true,
+    }, nil
 }
 
 func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) (*pb.GetUserTasksResponse, error) {
@@ -518,10 +555,11 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
         SELECT 
             id, user_id, name, description, created_at, deadline, author, "group", group_id,
             assigned_to, task_difficulty, custom_hours, mentioned_in_event,
-            is_completed, proof_url, privacy_level, privacy_except_ids
+            is_completed, proof_url, privacy_level, privacy_except_ids,
+            flag_status, flag_color, flag_name, display_order
         FROM tasks
         WHERE user_id = $1
-        ORDER BY created_at DESC
+        ORDER BY display_order ASC, created_at DESC
     `, req.UserId)
 
 	if err != nil {
@@ -539,19 +577,20 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
 			id, userID, name, description, author, group, groupID, taskDifficulty, privacyLevel string
 			createdAt                                                                           time.Time
 			deadlinePtr                                                                         *time.Time
-			// Change these from []byte to []string to match the PostgreSQL TEXT[] type
-			assignedTo, exceptIDs         []string
-			customHours                   int32
-			customHoursPtr                *int32
-			mentionedInEvent, isCompleted bool
-			proofURL                      string
-			proofURLPtr                   *string
+			assignedTo, exceptIDs                                                               []string
+			customHours                                                                         int32
+			customHoursPtr                                                                      *int32
+			mentionedInEvent, isCompleted, flagStatus                                           bool
+			proofURL, flagColor, flagName                                                       string
+			proofURLPtr, flagColorPtr, flagNamePtr                                              *string
+			displayOrder                                                                        int32
 		)
 
 		err := rows.Scan(
 			&id, &userID, &name, &description, &createdAt, &deadlinePtr, &author, &group, &groupID,
 			&assignedTo, &taskDifficulty, &customHoursPtr, &mentionedInEvent,
 			&isCompleted, &proofURLPtr, &privacyLevel, &exceptIDs,
+			&flagStatus, &flagColorPtr, &flagNamePtr, &displayOrder,
 		)
 		if err != nil {
 			log.Printf("ERROR scanning task row: %v", err)
@@ -575,7 +614,14 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
 			proofURL = *proofURLPtr
 		}
 
-		// Now we can directly use assignedTo and exceptIDs (they're already string arrays)
+		if flagColorPtr != nil {
+			flagColor = *flagColorPtr
+		}
+
+		if flagNamePtr != nil {
+			flagName = *flagNamePtr
+		}
+
 		task := &pb.Task{
 			Id:               id,
 			UserId:           userID,
@@ -586,7 +632,7 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
 			Author:           author,
 			Group:            group,
 			GroupId:          groupID,
-			AssignedTo:       assignedTo, // No need to unmarshal, it's already a string array
+			AssignedTo:       assignedTo,
 			TaskDifficulty:   taskDifficulty,
 			CustomHours:      customHours,
 			MentionedInEvent: mentionedInEvent,
@@ -596,8 +642,12 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
 			},
 			Privacy: &pb.PrivacySettings{
 				Level:     privacyLevel,
-				ExceptIds: exceptIDs, // No need to unmarshal, it's already a string array
+				ExceptIds: exceptIDs,
 			},
+			FlagStatus:   flagStatus,
+			FlagColor:    flagColor,
+			FlagName:     flagName,
+			DisplayOrder: displayOrder,
 		}
 
 		tasks = append(tasks, task)

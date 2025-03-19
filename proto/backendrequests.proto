@@ -17,6 +17,7 @@ service BackendRequests {
     rpc CheckHandleAvailability(CheckHandleRequest) returns (CheckHandleResponse) {}
     rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
     rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {}
+     rpc UpdateTaskOrder(UpdateTaskOrderRequest) returns (UpdateTaskOrderResponse) {}
 }
 
 message ValidateTokenRequest {
@@ -79,6 +80,21 @@ message RegisterNewProfileResponse {
     int64 id=2;
 }
 
+message UpdateTaskOrderRequest {
+  string user_id = 1;
+  repeated TaskOrderItem tasks = 2;
+}
+
+message TaskOrderItem {
+  string task_id = 1;
+  int32 display_order = 2;
+}
+
+message UpdateTaskOrderResponse {
+  bool success = 1;
+  string error = 2;
+}
+
 message Task {
   string id = 1;
   string user_id = 2;
@@ -95,6 +111,10 @@ message Task {
   bool mentioned_in_event = 13;
   CompletionStatus completion = 14;
   PrivacySettings privacy = 15;
+  bool flag_status = 16;
+  string flag_color = 17;
+  string flag_name = 18;
+  int32 display_order = 19;
 }
 
 message UpdateTaskRequest {
