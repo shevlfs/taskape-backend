@@ -66,14 +66,14 @@ func generateTokens(phone string) (*TokenPair, error) {
 
 	accessClaims := jwt.MapClaims{
 		"phone": phone,
-		"exp":   time.Now().Add(time.Minute * 15).Unix(),
+		"exp":   time.Now().Add(time.Hour * 24).Unix(),
 		"iat":   time.Now().Unix(),
 		"type":  "access",
 	}
 
 	refreshClaims := jwt.MapClaims{
 		"phone": phone,
-		"exp":   time.Now().Add(time.Hour * 24 * 7).Unix(),
+		"exp":   time.Now().Add(time.Hour * 24 * 30).Unix(),
 		"iat":   time.Now().Unix(),
 		"type":  "refresh",
 	}
