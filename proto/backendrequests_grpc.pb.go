@@ -31,6 +31,11 @@ const (
 	BackendRequests_GetUser_FullMethodName                 = "/taskapebackend.BackendRequests/GetUser"
 	BackendRequests_UpdateTask_FullMethodName              = "/taskapebackend.BackendRequests/UpdateTask"
 	BackendRequests_UpdateTaskOrder_FullMethodName         = "/taskapebackend.BackendRequests/UpdateTaskOrder"
+	BackendRequests_SearchUsers_FullMethodName             = "/taskapebackend.BackendRequests/SearchUsers"
+	BackendRequests_SendFriendRequest_FullMethodName       = "/taskapebackend.BackendRequests/SendFriendRequest"
+	BackendRequests_RespondToFriendRequest_FullMethodName  = "/taskapebackend.BackendRequests/RespondToFriendRequest"
+	BackendRequests_GetUserFriends_FullMethodName          = "/taskapebackend.BackendRequests/GetUserFriends"
+	BackendRequests_GetFriendRequests_FullMethodName       = "/taskapebackend.BackendRequests/GetFriendRequests"
 )
 
 // BackendRequestsClient is the client API for BackendRequests service.
@@ -49,6 +54,11 @@ type BackendRequestsClient interface {
 	GetUser(ctx context.Context, in *GetUserRequest, opts ...grpc.CallOption) (*GetUserResponse, error)
 	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*UpdateTaskResponse, error)
 	UpdateTaskOrder(ctx context.Context, in *UpdateTaskOrderRequest, opts ...grpc.CallOption) (*UpdateTaskOrderResponse, error)
+	SearchUsers(ctx context.Context, in *SearchUsersRequest, opts ...grpc.CallOption) (*SearchUsersResponse, error)
+	SendFriendRequest(ctx context.Context, in *SendFriendRequestRequest, opts ...grpc.CallOption) (*SendFriendRequestResponse, error)
+	RespondToFriendRequest(ctx context.Context, in *RespondToFriendRequestRequest, opts ...grpc.CallOption) (*RespondToFriendRequestResponse, error)
+	GetUserFriends(ctx context.Context, in *GetUserFriendsRequest, opts ...grpc.CallOption) (*GetUserFriendsResponse, error)
+	GetFriendRequests(ctx context.Context, in *GetFriendRequestsRequest, opts ...grpc.CallOption) (*GetFriendRequestsResponse, error)
 }
 
 type backendRequestsClient struct {
@@ -179,6 +189,56 @@ func (c *backendRequestsClient) UpdateTaskOrder(ctx context.Context, in *UpdateT
 	return out, nil
 }
 
+func (c *backendRequestsClient) SearchUsers(ctx context.Context, in *SearchUsersRequest, opts ...grpc.CallOption) (*SearchUsersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchUsersResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_SearchUsers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) SendFriendRequest(ctx context.Context, in *SendFriendRequestRequest, opts ...grpc.CallOption) (*SendFriendRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendFriendRequestResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_SendFriendRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) RespondToFriendRequest(ctx context.Context, in *RespondToFriendRequestRequest, opts ...grpc.CallOption) (*RespondToFriendRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RespondToFriendRequestResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_RespondToFriendRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) GetUserFriends(ctx context.Context, in *GetUserFriendsRequest, opts ...grpc.CallOption) (*GetUserFriendsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserFriendsResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUserFriends_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) GetFriendRequests(ctx context.Context, in *GetFriendRequestsRequest, opts ...grpc.CallOption) (*GetFriendRequestsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFriendRequestsResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetFriendRequests_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendRequestsServer is the server API for BackendRequests service.
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
@@ -195,6 +255,11 @@ type BackendRequestsServer interface {
 	GetUser(context.Context, *GetUserRequest) (*GetUserResponse, error)
 	UpdateTask(context.Context, *UpdateTaskRequest) (*UpdateTaskResponse, error)
 	UpdateTaskOrder(context.Context, *UpdateTaskOrderRequest) (*UpdateTaskOrderResponse, error)
+	SearchUsers(context.Context, *SearchUsersRequest) (*SearchUsersResponse, error)
+	SendFriendRequest(context.Context, *SendFriendRequestRequest) (*SendFriendRequestResponse, error)
+	RespondToFriendRequest(context.Context, *RespondToFriendRequestRequest) (*RespondToFriendRequestResponse, error)
+	GetUserFriends(context.Context, *GetUserFriendsRequest) (*GetUserFriendsResponse, error)
+	GetFriendRequests(context.Context, *GetFriendRequestsRequest) (*GetFriendRequestsResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
 }
 
@@ -240,6 +305,21 @@ func (UnimplementedBackendRequestsServer) UpdateTask(context.Context, *UpdateTas
 }
 func (UnimplementedBackendRequestsServer) UpdateTaskOrder(context.Context, *UpdateTaskOrderRequest) (*UpdateTaskOrderResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateTaskOrder not implemented")
+}
+func (UnimplementedBackendRequestsServer) SearchUsers(context.Context, *SearchUsersRequest) (*SearchUsersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SearchUsers not implemented")
+}
+func (UnimplementedBackendRequestsServer) SendFriendRequest(context.Context, *SendFriendRequestRequest) (*SendFriendRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendFriendRequest not implemented")
+}
+func (UnimplementedBackendRequestsServer) RespondToFriendRequest(context.Context, *RespondToFriendRequestRequest) (*RespondToFriendRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RespondToFriendRequest not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUserFriends(context.Context, *GetUserFriendsRequest) (*GetUserFriendsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserFriends not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetFriendRequests(context.Context, *GetFriendRequestsRequest) (*GetFriendRequestsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFriendRequests not implemented")
 }
 func (UnimplementedBackendRequestsServer) mustEmbedUnimplementedBackendRequestsServer() {}
 func (UnimplementedBackendRequestsServer) testEmbeddedByValue()                         {}
@@ -478,6 +558,96 @@ func _BackendRequests_UpdateTaskOrder_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_SearchUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchUsersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).SearchUsers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_SearchUsers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).SearchUsers(ctx, req.(*SearchUsersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_SendFriendRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendFriendRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).SendFriendRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_SendFriendRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).SendFriendRequest(ctx, req.(*SendFriendRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_RespondToFriendRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RespondToFriendRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).RespondToFriendRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_RespondToFriendRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).RespondToFriendRequest(ctx, req.(*RespondToFriendRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_GetUserFriends_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserFriendsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUserFriends(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUserFriends_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUserFriends(ctx, req.(*GetUserFriendsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_GetFriendRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFriendRequestsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetFriendRequests(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetFriendRequests_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetFriendRequests(ctx, req.(*GetFriendRequestsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendRequests_ServiceDesc is the grpc.ServiceDesc for BackendRequests service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -532,6 +702,26 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateTaskOrder",
 			Handler:    _BackendRequests_UpdateTaskOrder_Handler,
+		},
+		{
+			MethodName: "SearchUsers",
+			Handler:    _BackendRequests_SearchUsers_Handler,
+		},
+		{
+			MethodName: "SendFriendRequest",
+			Handler:    _BackendRequests_SendFriendRequest_Handler,
+		},
+		{
+			MethodName: "RespondToFriendRequest",
+			Handler:    _BackendRequests_RespondToFriendRequest_Handler,
+		},
+		{
+			MethodName: "GetUserFriends",
+			Handler:    _BackendRequests_GetUserFriends_Handler,
+		},
+		{
+			MethodName: "GetFriendRequests",
+			Handler:    _BackendRequests_GetFriendRequests_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

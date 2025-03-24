@@ -17,7 +17,12 @@ service BackendRequests {
     rpc CheckHandleAvailability(CheckHandleRequest) returns (CheckHandleResponse) {}
     rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
     rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {}
-     rpc UpdateTaskOrder(UpdateTaskOrderRequest) returns (UpdateTaskOrderResponse) {}
+    rpc UpdateTaskOrder(UpdateTaskOrderRequest) returns (UpdateTaskOrderResponse) {}
+    rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse) {}
+    rpc SendFriendRequest(SendFriendRequestRequest) returns (SendFriendRequestResponse) {}
+    rpc RespondToFriendRequest(RespondToFriendRequestRequest) returns (RespondToFriendRequestResponse) {}
+    rpc GetUserFriends(GetUserFriendsRequest) returns (GetUserFriendsResponse) {}
+    rpc GetFriendRequests(GetFriendRequestsRequest) returns (GetFriendRequestsResponse) {}
 }
 
 message ValidateTokenRequest {
@@ -55,7 +60,7 @@ message NewUserLoginResponse {
     string token = 1;
     string refresh_token = 2;
     bool profile_exists = 3;
-     int64 user_id = 4;
+    int64 user_id = 4;
 }
 
 message VerifyUserRequest {
@@ -170,12 +175,86 @@ message GetUserRequest {
   string user_id = 1;
 }
 
+message Friend {
+    string id = 1;
+    string handle = 2;
+    string profile_picture = 3;
+    string color = 4;
+}
+
+message FriendRequest {
+    string id = 1;
+    string sender_id = 2;
+    string sender_handle = 3;
+    string receiver_id = 4;
+    string status = 5;
+    google.protobuf.Timestamp created_at = 6;
+}
+
+message SearchUsersRequest {
+    string query = 1;
+    int32 limit = 2;
+}
+
+message SearchUsersResponse {
+    repeated UserSearchResult users = 1;
+}
+
+message UserSearchResult {
+    string id = 1;
+    string handle = 2;
+    string profile_picture = 3;
+    string color = 4;
+}
+
+message SendFriendRequestRequest {
+    string sender_id = 1;
+    string receiver_id = 2;
+}
+
+message SendFriendRequestResponse {
+    bool success = 1;
+    string request_id = 2;
+    string error = 3;
+}
+
+message RespondToFriendRequestRequest {
+    string request_id = 1;
+    string user_id = 2;
+    string response = 3;
+}
+
+message RespondToFriendRequestResponse {
+    bool success = 1;
+    string error = 2;
+}
+
+message GetUserFriendsRequest {
+    string user_id = 1;
+}
+
+message GetUserFriendsResponse {
+    repeated Friend friends = 1;
+}
+
+message GetFriendRequestsRequest {
+    string user_id = 1;
+    string type = 2;
+}
+
+message GetFriendRequestsResponse {
+    repeated FriendRequest requests = 1;
+}
+
 message GetUserResponse {
-  bool success = 1;
-  string id = 2;
-  string handle = 3;
-  string bio = 4;
-  string profile_picture = 5;
-  string color = 6;
-  string error = 7;
+    bool success = 1;
+    string id = 2;
+    string handle = 3;
+    string bio = 4;
+    string profile_picture = 5;
+    string color = 6;
+    repeated Friend friends = 7;
+    repeated FriendRequest incoming_requests = 8;
+    repeated FriendRequest outgoing_requests = 9;
+    string error = 10;
 }

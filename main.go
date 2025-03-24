@@ -125,50 +125,6 @@ func (s *server) UpdateTaskOrder(ctx context.Context, req *pb.UpdateTaskOrderReq
 	}, nil
 }
 
-func (s *server) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-	if req.UserId == "" {
-		return &pb.GetUserResponse{
-			Success: false,
-			Error:   "User ID is required",
-		}, nil
-	}
-
-	var id int64
-	var handle, bio, profilePicture, color string
-
-	userId, err := strconv.ParseInt(req.UserId, 10, 64)
-	if err != nil {
-		return &pb.GetUserResponse{
-			Success: false,
-			Error:   "Invalid user ID format",
-		}, nil
-	}
-
-	err = s.pool.QueryRow(ctx,
-		"SELECT id, handle, bio, profile_picture, color FROM users WHERE id = $1",
-		userId).Scan(&id, &handle, &bio, &profilePicture, &color)
-
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return &pb.GetUserResponse{
-				Success: false,
-				Error:   "User not found",
-			}, nil
-		}
-		return nil, fmt.Errorf("failed to query user: %v", err)
-	}
-	print("gave out user" + handle)
-
-	return &pb.GetUserResponse{
-		Success:        true,
-		Id:             fmt.Sprintf("%d", id),
-		Handle:         handle,
-		Bio:            bio,
-		ProfilePicture: profilePicture,
-		Color:          color,
-	}, nil
-}
-
 func (s *server) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequest) (*pb.NewUserLoginResponse, error) {
 	print("LoginNewUser called with phone: ", req.Phone)
 	tx, err := s.pool.Begin(ctx)
@@ -458,30 +414,29 @@ func (s *server) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksBatchR
 }
 
 func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb.UpdateTaskResponse, error) {
-    tx, err := s.pool.Begin(ctx)
-    if err != nil {
-        return nil, fmt.Errorf("failed to begin transaction: %v", err)
-    }
-    defer tx.Rollback(ctx)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
 
-    var deadline *time.Time
-    if req.Task.Deadline != nil {
-        t := req.Task.Deadline.AsTime()
-        deadline = &t
-    }
+	var deadline *time.Time
+	if req.Task.Deadline != nil {
+		t := req.Task.Deadline.AsTime()
+		deadline = &t
+	}
 
-    assignedToArray := "{}" // Empty PostgreSQL array
-    if len(req.Task.AssignedTo) > 0 {
-        // Format as PostgreSQL text array: {element1,element2}
-        assignedToArray = fmt.Sprintf("{%s}", strings.Join(req.Task.AssignedTo, ","))
-    }
+	assignedToArray := "{}"
+	if len(req.Task.AssignedTo) > 0 {
+		assignedToArray = fmt.Sprintf("{%s}", strings.Join(req.Task.AssignedTo, ","))
+	}
 
-    exceptIDsArray := "{}"
-    if len(req.Task.Privacy.ExceptIds) > 0 {
-        exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
-    }
+	exceptIDsArray := "{}"
+	if len(req.Task.Privacy.ExceptIds) > 0 {
+		exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(req.Task.Privacy.ExceptIds, ","))
+	}
 
-    result, err := tx.Exec(ctx, `
+	result, err := tx.Exec(ctx, `
     UPDATE tasks SET
         name = $1,
         description = $2,
@@ -499,44 +454,44 @@ func (s *server) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*pb
         display_order = $14
     WHERE id = $15 AND user_id = $16
     `,
-        req.Task.Name,
-        req.Task.Description,
-        deadline,
-        assignedToArray,
-        req.Task.TaskDifficulty,
-        req.Task.CustomHours,
-        req.Task.Completion.IsCompleted,
-        req.Task.Completion.ProofUrl,
-        req.Task.Privacy.Level,
-        exceptIDsArray,
-        req.Task.FlagStatus,
-        req.Task.FlagColor,
-        req.Task.FlagName,
-        req.Task.DisplayOrder,
-        req.Task.Id,
-        req.Task.UserId,
-    )
+		req.Task.Name,
+		req.Task.Description,
+		deadline,
+		assignedToArray,
+		req.Task.TaskDifficulty,
+		req.Task.CustomHours,
+		req.Task.Completion.IsCompleted,
+		req.Task.Completion.ProofUrl,
+		req.Task.Privacy.Level,
+		exceptIDsArray,
+		req.Task.FlagStatus,
+		req.Task.FlagColor,
+		req.Task.FlagName,
+		req.Task.DisplayOrder,
+		req.Task.Id,
+		req.Task.UserId,
+	)
 
-    if err != nil {
-        return nil, fmt.Errorf("failed to update task: %v", err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %v", err)
+	}
 
-    rowsAffected := result.RowsAffected()
-    if rowsAffected == 0 {
-        return &pb.UpdateTaskResponse{
-            Success: false,
-            Error:   "No task found with the provided ID and user ID",
-        }, nil
-    }
-    
-    err = tx.Commit(ctx)
-    if err != nil {
-        return nil, fmt.Errorf("failed to commit transaction: %v", err)
-    }
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return &pb.UpdateTaskResponse{
+			Success: false,
+			Error:   "No task found with the provided ID and user ID",
+		}, nil
+	}
 
-    return &pb.UpdateTaskResponse{
-        Success: true,
-    }, nil
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.UpdateTaskResponse{
+		Success: true,
+	}, nil
 }
 
 func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) (*pb.GetUserTasksResponse, error) {
@@ -550,7 +505,6 @@ func (s *server) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) 
 		}, nil
 	}
 
-	// Query the database
 	rows, err := s.pool.Query(ctx, `
         SELECT 
             id, user_id, name, description, created_at, deadline, author, "group", group_id,
@@ -695,6 +649,486 @@ func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 		return nil, status.Errorf(codes.Unauthenticated, "invalid token")
 	}
 	return handler(ctx, req)
+}
+
+func (s *server) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest) (*pb.SearchUsersResponse, error) {
+	if req.Query == "" {
+		return nil, fmt.Errorf("search query is required")
+	}
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	rows, err := s.pool.Query(ctx, `
+        SELECT id, handle, profile_picture, color
+        FROM users
+        WHERE handle ILIKE $1
+        ORDER BY 
+            CASE 
+                WHEN handle ILIKE $2 THEN 0 -- Exact match
+                WHEN handle ILIKE $3 THEN 1 -- Starts with query
+                ELSE 2 -- Contains query
+            END,
+            handle
+        LIMIT $4
+    `, "%"+req.Query+"%", req.Query, req.Query+"%", limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search users: %v", err)
+	}
+	defer rows.Close()
+
+	var users []*pb.UserSearchResult
+	for rows.Next() {
+		var id, handle, profilePicture, color string
+		err := rows.Scan(&id, &handle, &profilePicture, &color)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user search result: %v", err)
+		}
+
+		users = append(users, &pb.UserSearchResult{
+			Id:             id,
+			Handle:         handle,
+			ProfilePicture: profilePicture,
+			Color:          color,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user search results: %v", err)
+	}
+
+	return &pb.SearchUsersResponse{
+		Users: users,
+	}, nil
+}
+
+func (s *server) SendFriendRequest(ctx context.Context, req *pb.SendFriendRequestRequest) (*pb.SendFriendRequestResponse, error) {
+	if req.SenderId == "" || req.ReceiverId == "" {
+		return nil, fmt.Errorf("sender and receiver IDs are required")
+	}
+
+	var senderExists, receiverExists bool
+	err := s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.SenderId).Scan(&senderExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check sender existence: %v", err)
+	}
+
+	err = s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.ReceiverId).Scan(&receiverExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check receiver existence: %v", err)
+	}
+
+	if !senderExists {
+		return &pb.SendFriendRequestResponse{
+			Success: false,
+			Error:   "Sender user not found",
+		}, nil
+	}
+
+	if !receiverExists {
+		return &pb.SendFriendRequestResponse{
+			Success: false,
+			Error:   "Receiver user not found",
+		}, nil
+	}
+
+	var alreadyFriends bool
+	err = s.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM user_friends WHERE user_id = $1 AND friend_id = $2)", req.SenderId, req.ReceiverId).Scan(&alreadyFriends)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing friendship: %v", err)
+	}
+
+	if alreadyFriends {
+		return &pb.SendFriendRequestResponse{
+			Success: false,
+			Error:   "Users are already friends",
+		}, nil
+	}
+
+	var requestId string
+	var status string
+	err = s.pool.QueryRow(ctx, `
+    SELECT id, status FROM friend_requests 
+    WHERE sender_id = $1 AND receiver_id = $2
+`, req.SenderId, req.ReceiverId).Scan(&requestId, &status)
+
+	if err != nil {
+		if err == pgx.ErrNoRows || err.Error() == pgx.ErrNoRows.Error() {
+			fmt.Printf("No existing request found, will create new one\n")
+		} else {
+			return nil, fmt.Errorf("failed to check existing request: %v", err)
+		}
+	}
+
+	if err == nil {
+		if status == "pending" {
+			return &pb.SendFriendRequestResponse{
+				Success:   true,
+				RequestId: requestId,
+				Error:     "Friend request already sent",
+			}, nil
+		} else if status == "rejected" {
+			_, err = s.pool.Exec(ctx, `
+            UPDATE friend_requests 
+            SET status = 'pending', updated_at = NOW() 
+            WHERE id = $1
+        `, requestId)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to update friend request: %v", err)
+			}
+
+			return &pb.SendFriendRequestResponse{
+				Success:   true,
+				RequestId: requestId,
+			}, nil
+		}
+	}
+
+	err = s.pool.QueryRow(ctx, `
+    INSERT INTO friend_requests (sender_id, receiver_id, status) 
+    VALUES ($1, $2, 'pending') 
+    RETURNING id
+`, req.SenderId, req.ReceiverId).Scan(&requestId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create friend request: %v", err)
+	}
+
+	return &pb.SendFriendRequestResponse{
+		Success:   true,
+		RequestId: requestId,
+	}, nil
+}
+
+func (s *server) RespondToFriendRequest(ctx context.Context, req *pb.RespondToFriendRequestRequest) (*pb.RespondToFriendRequestResponse, error) {
+	if req.RequestId == "" || req.UserId == "" || req.Response == "" {
+		return nil, fmt.Errorf("request ID, user ID, and response are required")
+	}
+
+	if req.Response != "accept" && req.Response != "reject" {
+		return nil, fmt.Errorf("response must be 'accept' or 'reject'")
+	}
+
+	var senderId, receiverId string
+	var status string
+	err := s.pool.QueryRow(ctx, `
+        SELECT sender_id, receiver_id, status 
+        FROM friend_requests 
+        WHERE id = $1
+    `, req.RequestId).Scan(&senderId, &receiverId, &status)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return &pb.RespondToFriendRequestResponse{
+				Success: false,
+				Error:   "Friend request not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to get friend request: %v", err)
+	}
+
+	if receiverId != req.UserId {
+		return &pb.RespondToFriendRequestResponse{
+			Success: false,
+			Error:   "User is not the receiver of this friend request",
+		}, nil
+	}
+
+	if status != "pending" {
+		return &pb.RespondToFriendRequestResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Friend request is already %s", status),
+		}, nil
+	}
+
+	_, err = s.pool.Exec(ctx, `
+        UPDATE friend_requests 
+        SET status = $1, updated_at = NOW() 
+        WHERE id = $2
+    `, req.Response, req.RequestId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update friend request: %v", err)
+	}
+
+	if req.Response == "accept" {
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin transaction: %v", err)
+		}
+		defer tx.Rollback(ctx)
+
+		_, err = tx.Exec(ctx, `
+            INSERT INTO user_friends (user_id, friend_id) VALUES ($1, $2)
+        `, receiverId, senderId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create friendship record (receiver->sender): %v", err)
+		}
+
+		_, err = tx.Exec(ctx, `
+            INSERT INTO user_friends (user_id, friend_id) VALUES ($1, $2)
+        `, senderId, receiverId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create friendship record (sender->receiver): %v", err)
+		}
+
+		err = tx.Commit(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to commit transaction: %v", err)
+		}
+	}
+
+	return &pb.RespondToFriendRequestResponse{
+		Success: true,
+	}, nil
+}
+
+func (s *server) GetUserFriends(ctx context.Context, req *pb.GetUserFriendsRequest) (*pb.GetUserFriendsResponse, error) {
+	if req.UserId == "" {
+		return nil, fmt.Errorf("user ID is required")
+	}
+
+	rows, err := s.pool.Query(ctx, `
+        SELECT u.id, u.handle, u.profile_picture, u.color
+        FROM users u
+        JOIN user_friends uf ON u.id = uf.friend_id
+        WHERE uf.user_id = $1
+    `, req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user friends: %v", err)
+	}
+	defer rows.Close()
+
+	var friends []*pb.Friend
+	for rows.Next() {
+		var id, handle, profilePicture, color string
+		err := rows.Scan(&id, &handle, &profilePicture, &color)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan friend row: %v", err)
+		}
+
+		friends = append(friends, &pb.Friend{
+			Id:             id,
+			Handle:         handle,
+			ProfilePicture: profilePicture,
+			Color:          color,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating friend rows: %v", err)
+	}
+
+	return &pb.GetUserFriendsResponse{
+		Friends: friends,
+	}, nil
+}
+
+func (s *server) GetFriendRequests(ctx context.Context, req *pb.GetFriendRequestsRequest) (*pb.GetFriendRequestsResponse, error) {
+	if req.UserId == "" {
+		return nil, fmt.Errorf("user ID is required")
+	}
+
+	if req.Type != "incoming" && req.Type != "outgoing" {
+		return nil, fmt.Errorf("type must be 'incoming' or 'outgoing'")
+	}
+
+	var query string
+	var args []interface{}
+
+	if req.Type == "incoming" {
+		query = `
+            SELECT fr.id, fr.sender_id, u.handle, fr.receiver_id, fr.status, fr.created_at
+            FROM friend_requests fr
+            JOIN users u ON fr.sender_id = u.id
+            WHERE fr.receiver_id = $1 AND fr.status = 'pending'
+            ORDER BY fr.created_at DESC
+        `
+		args = append(args, req.UserId)
+	} else {
+		query = `
+            SELECT fr.id, fr.sender_id, u.handle, fr.receiver_id, fr.status, fr.created_at
+            FROM friend_requests fr
+            JOIN users u ON fr.receiver_id = u.id
+            WHERE fr.sender_id = $1 AND fr.status = 'pending'
+            ORDER BY fr.created_at DESC
+        `
+		args = append(args, req.UserId)
+	}
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query friend requests: %v", err)
+	}
+	defer rows.Close()
+
+	var requests []*pb.FriendRequest
+	for rows.Next() {
+		var id, senderId, senderHandle, receiverId, status string
+		var createdAt time.Time
+
+		err := rows.Scan(&id, &senderId, &senderHandle, &receiverId, &status, &createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan friend request row: %v", err)
+		}
+
+		requests = append(requests, &pb.FriendRequest{
+			Id:           id,
+			SenderId:     senderId,
+			SenderHandle: senderHandle,
+			ReceiverId:   receiverId,
+			Status:       status,
+			CreatedAt:    timestamppb.New(createdAt),
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating friend request rows: %v", err)
+	}
+
+	return &pb.GetFriendRequestsResponse{
+		Requests: requests,
+	}, nil
+}
+
+func (s *server) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+	if req.UserId == "" {
+		return &pb.GetUserResponse{
+			Success: false,
+			Error:   "User ID is required",
+		}, nil
+	}
+
+	var id int64
+	var handle, bio, profilePicture, color string
+
+	userId, err := strconv.ParseInt(req.UserId, 10, 64)
+	if err != nil {
+		return &pb.GetUserResponse{
+			Success: false,
+			Error:   "Invalid user ID format",
+		}, nil
+	}
+
+	err = s.pool.QueryRow(ctx,
+		"SELECT id, handle, bio, profile_picture, color FROM users WHERE id = $1",
+		userId).Scan(&id, &handle, &bio, &profilePicture, &color)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return &pb.GetUserResponse{
+				Success: false,
+				Error:   "User not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to query user: %v", err)
+	}
+
+	friendsRows, err := s.pool.Query(ctx, `
+        SELECT u.id, u.handle, u.profile_picture, u.color
+        FROM users u
+        JOIN user_friends uf ON u.id = uf.friend_id
+        WHERE uf.user_id = $1
+    `, userId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user friends: %v", err)
+	}
+	defer friendsRows.Close()
+
+	var friends []*pb.Friend
+	for friendsRows.Next() {
+		var friendId, friendHandle, friendPic, friendColor string
+		err := friendsRows.Scan(&friendId, &friendHandle, &friendPic, &friendColor)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan friend row: %v", err)
+		}
+
+		friends = append(friends, &pb.Friend{
+			Id:             friendId,
+			Handle:         friendHandle,
+			ProfilePicture: friendPic,
+			Color:          friendColor,
+		})
+	}
+
+	incomingRows, err := s.pool.Query(ctx, `
+        SELECT fr.id, fr.sender_id, u.handle, fr.receiver_id, fr.status, fr.created_at
+        FROM friend_requests fr
+        JOIN users u ON fr.sender_id = u.id
+        WHERE fr.receiver_id = $1 AND fr.status = 'pending'
+        ORDER BY fr.created_at DESC
+    `, userId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query incoming friend requests: %v", err)
+	}
+	defer incomingRows.Close()
+
+	var incomingRequests []*pb.FriendRequest
+	for incomingRows.Next() {
+		var reqId, senderId, senderHandle, receiverId, status string
+		var createdAt time.Time
+
+		err := incomingRows.Scan(&reqId, &senderId, &senderHandle, &receiverId, &status, &createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan incoming request row: %v", err)
+		}
+
+		incomingRequests = append(incomingRequests, &pb.FriendRequest{
+			Id:           reqId,
+			SenderId:     senderId,
+			SenderHandle: senderHandle,
+			ReceiverId:   receiverId,
+			Status:       status,
+			CreatedAt:    timestamppb.New(createdAt),
+		})
+	}
+
+	outgoingRows, err := s.pool.Query(ctx, `
+        SELECT fr.id, fr.sender_id, u.handle, fr.receiver_id, fr.status, fr.created_at
+        FROM friend_requests fr
+        JOIN users u ON fr.receiver_id = u.id
+        WHERE fr.sender_id = $1 AND fr.status = 'pending'
+        ORDER BY fr.created_at DESC
+    `, userId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query outgoing friend requests: %v", err)
+	}
+	defer outgoingRows.Close()
+
+	var outgoingRequests []*pb.FriendRequest
+	for outgoingRows.Next() {
+		var reqId, senderId, receiverHandle, receiverId, status string
+		var createdAt time.Time
+
+		err := outgoingRows.Scan(&reqId, &senderId, &receiverHandle, &receiverId, &status, &createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan outgoing request row: %v", err)
+		}
+
+		outgoingRequests = append(outgoingRequests, &pb.FriendRequest{
+			Id:           reqId,
+			SenderId:     senderId,
+			SenderHandle: "self",
+			ReceiverId:   receiverId,
+			Status:       status,
+			CreatedAt:    timestamppb.New(createdAt),
+		})
+	}
+
+	return &pb.GetUserResponse{
+		Success:          true,
+		Id:               fmt.Sprintf("%d", id),
+		Handle:           handle,
+		Bio:              bio,
+		ProfilePicture:   profilePicture,
+		Color:            color,
+		Friends:          friends,
+		IncomingRequests: incomingRequests,
+		OutgoingRequests: outgoingRequests,
+	}, nil
 }
 
 func main() {
