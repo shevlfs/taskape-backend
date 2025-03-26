@@ -36,6 +36,13 @@ const (
 	BackendRequests_RespondToFriendRequest_FullMethodName  = "/taskapebackend.BackendRequests/RespondToFriendRequest"
 	BackendRequests_GetUserFriends_FullMethodName          = "/taskapebackend.BackendRequests/GetUserFriends"
 	BackendRequests_GetFriendRequests_FullMethodName       = "/taskapebackend.BackendRequests/GetFriendRequests"
+	BackendRequests_GetUserEvents_FullMethodName           = "/taskapebackend.BackendRequests/GetUserEvents"
+	BackendRequests_ConfirmTaskCompletion_FullMethodName   = "/taskapebackend.BackendRequests/ConfirmTaskCompletion"
+	BackendRequests_LikeEvent_FullMethodName               = "/taskapebackend.BackendRequests/LikeEvent"
+	BackendRequests_UnlikeEvent_FullMethodName             = "/taskapebackend.BackendRequests/UnlikeEvent"
+	BackendRequests_AddEventComment_FullMethodName         = "/taskapebackend.BackendRequests/AddEventComment"
+	BackendRequests_GetEventComments_FullMethodName        = "/taskapebackend.BackendRequests/GetEventComments"
+	BackendRequests_DeleteEventComment_FullMethodName      = "/taskapebackend.BackendRequests/DeleteEventComment"
 )
 
 // BackendRequestsClient is the client API for BackendRequests service.
@@ -59,6 +66,13 @@ type BackendRequestsClient interface {
 	RespondToFriendRequest(ctx context.Context, in *RespondToFriendRequestRequest, opts ...grpc.CallOption) (*RespondToFriendRequestResponse, error)
 	GetUserFriends(ctx context.Context, in *GetUserFriendsRequest, opts ...grpc.CallOption) (*GetUserFriendsResponse, error)
 	GetFriendRequests(ctx context.Context, in *GetFriendRequestsRequest, opts ...grpc.CallOption) (*GetFriendRequestsResponse, error)
+	GetUserEvents(ctx context.Context, in *GetUserEventsRequest, opts ...grpc.CallOption) (*GetUserEventsResponse, error)
+	ConfirmTaskCompletion(ctx context.Context, in *ConfirmTaskCompletionRequest, opts ...grpc.CallOption) (*ConfirmTaskCompletionResponse, error)
+	LikeEvent(ctx context.Context, in *LikeEventRequest, opts ...grpc.CallOption) (*LikeEventResponse, error)
+	UnlikeEvent(ctx context.Context, in *UnlikeEventRequest, opts ...grpc.CallOption) (*UnlikeEventResponse, error)
+	AddEventComment(ctx context.Context, in *AddEventCommentRequest, opts ...grpc.CallOption) (*AddEventCommentResponse, error)
+	GetEventComments(ctx context.Context, in *GetEventCommentsRequest, opts ...grpc.CallOption) (*GetEventCommentsResponse, error)
+	DeleteEventComment(ctx context.Context, in *DeleteEventCommentRequest, opts ...grpc.CallOption) (*DeleteEventCommentResponse, error)
 }
 
 type backendRequestsClient struct {
@@ -239,6 +253,76 @@ func (c *backendRequestsClient) GetFriendRequests(ctx context.Context, in *GetFr
 	return out, nil
 }
 
+func (c *backendRequestsClient) GetUserEvents(ctx context.Context, in *GetUserEventsRequest, opts ...grpc.CallOption) (*GetUserEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserEventsResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUserEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) ConfirmTaskCompletion(ctx context.Context, in *ConfirmTaskCompletionRequest, opts ...grpc.CallOption) (*ConfirmTaskCompletionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmTaskCompletionResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_ConfirmTaskCompletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) LikeEvent(ctx context.Context, in *LikeEventRequest, opts ...grpc.CallOption) (*LikeEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LikeEventResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_LikeEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) UnlikeEvent(ctx context.Context, in *UnlikeEventRequest, opts ...grpc.CallOption) (*UnlikeEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnlikeEventResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_UnlikeEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) AddEventComment(ctx context.Context, in *AddEventCommentRequest, opts ...grpc.CallOption) (*AddEventCommentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddEventCommentResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_AddEventComment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) GetEventComments(ctx context.Context, in *GetEventCommentsRequest, opts ...grpc.CallOption) (*GetEventCommentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetEventCommentsResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetEventComments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) DeleteEventComment(ctx context.Context, in *DeleteEventCommentRequest, opts ...grpc.CallOption) (*DeleteEventCommentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteEventCommentResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_DeleteEventComment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendRequestsServer is the server API for BackendRequests service.
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
@@ -260,6 +344,13 @@ type BackendRequestsServer interface {
 	RespondToFriendRequest(context.Context, *RespondToFriendRequestRequest) (*RespondToFriendRequestResponse, error)
 	GetUserFriends(context.Context, *GetUserFriendsRequest) (*GetUserFriendsResponse, error)
 	GetFriendRequests(context.Context, *GetFriendRequestsRequest) (*GetFriendRequestsResponse, error)
+	GetUserEvents(context.Context, *GetUserEventsRequest) (*GetUserEventsResponse, error)
+	ConfirmTaskCompletion(context.Context, *ConfirmTaskCompletionRequest) (*ConfirmTaskCompletionResponse, error)
+	LikeEvent(context.Context, *LikeEventRequest) (*LikeEventResponse, error)
+	UnlikeEvent(context.Context, *UnlikeEventRequest) (*UnlikeEventResponse, error)
+	AddEventComment(context.Context, *AddEventCommentRequest) (*AddEventCommentResponse, error)
+	GetEventComments(context.Context, *GetEventCommentsRequest) (*GetEventCommentsResponse, error)
+	DeleteEventComment(context.Context, *DeleteEventCommentRequest) (*DeleteEventCommentResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
 }
 
@@ -320,6 +411,27 @@ func (UnimplementedBackendRequestsServer) GetUserFriends(context.Context, *GetUs
 }
 func (UnimplementedBackendRequestsServer) GetFriendRequests(context.Context, *GetFriendRequestsRequest) (*GetFriendRequestsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFriendRequests not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUserEvents(context.Context, *GetUserEventsRequest) (*GetUserEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserEvents not implemented")
+}
+func (UnimplementedBackendRequestsServer) ConfirmTaskCompletion(context.Context, *ConfirmTaskCompletionRequest) (*ConfirmTaskCompletionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmTaskCompletion not implemented")
+}
+func (UnimplementedBackendRequestsServer) LikeEvent(context.Context, *LikeEventRequest) (*LikeEventResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LikeEvent not implemented")
+}
+func (UnimplementedBackendRequestsServer) UnlikeEvent(context.Context, *UnlikeEventRequest) (*UnlikeEventResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnlikeEvent not implemented")
+}
+func (UnimplementedBackendRequestsServer) AddEventComment(context.Context, *AddEventCommentRequest) (*AddEventCommentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddEventComment not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetEventComments(context.Context, *GetEventCommentsRequest) (*GetEventCommentsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEventComments not implemented")
+}
+func (UnimplementedBackendRequestsServer) DeleteEventComment(context.Context, *DeleteEventCommentRequest) (*DeleteEventCommentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteEventComment not implemented")
 }
 func (UnimplementedBackendRequestsServer) mustEmbedUnimplementedBackendRequestsServer() {}
 func (UnimplementedBackendRequestsServer) testEmbeddedByValue()                         {}
@@ -648,6 +760,132 @@ func _BackendRequests_GetFriendRequests_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_GetUserEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUserEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUserEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUserEvents(ctx, req.(*GetUserEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_ConfirmTaskCompletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmTaskCompletionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).ConfirmTaskCompletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_ConfirmTaskCompletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).ConfirmTaskCompletion(ctx, req.(*ConfirmTaskCompletionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_LikeEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LikeEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).LikeEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_LikeEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).LikeEvent(ctx, req.(*LikeEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_UnlikeEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlikeEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).UnlikeEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_UnlikeEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).UnlikeEvent(ctx, req.(*UnlikeEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_AddEventComment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddEventCommentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).AddEventComment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_AddEventComment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).AddEventComment(ctx, req.(*AddEventCommentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_GetEventComments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEventCommentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetEventComments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetEventComments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetEventComments(ctx, req.(*GetEventCommentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_DeleteEventComment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteEventCommentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).DeleteEventComment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_DeleteEventComment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).DeleteEventComment(ctx, req.(*DeleteEventCommentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendRequests_ServiceDesc is the grpc.ServiceDesc for BackendRequests service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -722,6 +960,34 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFriendRequests",
 			Handler:    _BackendRequests_GetFriendRequests_Handler,
+		},
+		{
+			MethodName: "GetUserEvents",
+			Handler:    _BackendRequests_GetUserEvents_Handler,
+		},
+		{
+			MethodName: "ConfirmTaskCompletion",
+			Handler:    _BackendRequests_ConfirmTaskCompletion_Handler,
+		},
+		{
+			MethodName: "LikeEvent",
+			Handler:    _BackendRequests_LikeEvent_Handler,
+		},
+		{
+			MethodName: "UnlikeEvent",
+			Handler:    _BackendRequests_UnlikeEvent_Handler,
+		},
+		{
+			MethodName: "AddEventComment",
+			Handler:    _BackendRequests_AddEventComment_Handler,
+		},
+		{
+			MethodName: "GetEventComments",
+			Handler:    _BackendRequests_GetEventComments_Handler,
+		},
+		{
+			MethodName: "DeleteEventComment",
+			Handler:    _BackendRequests_DeleteEventComment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

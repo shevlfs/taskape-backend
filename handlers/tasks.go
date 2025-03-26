@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -302,7 +303,6 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 	var args []interface{}
 
 	if req.UserId == req.RequesterId {
-		// If viewing own tasks, get everything
 		query = `
             SELECT 
                 id, user_id, name, description, created_at, deadline, author, "group", group_id,
@@ -314,7 +314,6 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
         `
 		args = append(args, req.UserId)
 	} else if req.RequesterId == "" {
-		// If no requester_id (anonymous), only get public tasks
 		query = `
             SELECT 
                 id, user_id, name, description, created_at, deadline, author, "group", group_id,
@@ -326,7 +325,6 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
         `
 		args = append(args, req.UserId)
 	} else {
-		// For authenticated users (potential friends)
 		query = `
             SELECT 
                 id, user_id, name, description, created_at, deadline, author, "group", group_id,
@@ -363,7 +361,6 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 
 	query += " ORDER BY display_order ASC, created_at DESC"
 
-	// Execute the query
 	rows, err := h.Pool.Query(ctx, query, args...)
 	if err != nil {
 		log.Printf("ERROR querying tasks for user %s: %v", req.UserId, err)
@@ -374,7 +371,6 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 	}
 	defer rows.Close()
 
-	// Process the results (the rest of the function remains the same)
 	var tasks []*pb.Task
 	for rows.Next() {
 		var (
@@ -470,5 +466,83 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 	return &pb.GetUserTasksResponse{
 		Success: true,
 		Tasks:   tasks,
+	}, nil
+}
+
+func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.ConfirmTaskCompletionRequest) (*pb.ConfirmTaskCompletionResponse, error) {
+	if req.TaskId == "" || req.ConfirmerId == "" {
+		return &pb.ConfirmTaskCompletionResponse{
+			Success: false,
+			Error:   "Task ID and confirmer ID are required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var userID string
+	var needsConfirmation bool
+	err = tx.QueryRow(ctx, `
+		SELECT user_id, needs_confirmation 
+		FROM tasks 
+		WHERE id = $1
+	`, req.TaskId).Scan(&userID, &needsConfirmation)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %v", err)
+	}
+
+	if !needsConfirmation {
+		return &pb.ConfirmTaskCompletionResponse{
+			Success: false,
+			Error:   "Task does not require confirmation",
+		}, nil
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE tasks 
+		SET is_confirmed = $1, 
+		    confirmation_user_id = $2, 
+		    confirmed_at = NOW() 
+		WHERE id = $3
+	`, req.IsConfirmed, req.ConfirmerId, req.TaskId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task confirmation: %v", err)
+	}
+
+	if req.IsConfirmed {
+		eventID := uuid.New().String()
+		taskIDsArray := fmt.Sprintf("{\"%s\"}", req.TaskId)
+
+		sizes := []string{"small", "medium", "large"}
+		eventSize := sizes[rand.Intn(len(sizes))]
+
+		expiresAt := time.Now().Add(24 * time.Hour)
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO events (
+				id, user_id, target_user_id, event_type, event_size, 
+				created_at, expires_at, task_ids, likes_count, comments_count
+			) VALUES (
+				$1, $2, $3, 'newly_completed', $4, 
+				NOW(), $5, $6, 0, 0
+			)
+		`, eventID, userID, userID, eventSize, expiresAt, taskIDsArray)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to create completion event: %v", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.ConfirmTaskCompletionResponse{
+		Success: true,
 	}, nil
 }

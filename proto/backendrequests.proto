@@ -23,6 +23,16 @@ service BackendRequests {
     rpc RespondToFriendRequest(RespondToFriendRequestRequest) returns (RespondToFriendRequestResponse) {}
     rpc GetUserFriends(GetUserFriendsRequest) returns (GetUserFriendsResponse) {}
     rpc GetFriendRequests(GetFriendRequestsRequest) returns (GetFriendRequestsResponse) {}
+
+    rpc GetUserEvents(GetUserEventsRequest) returns (GetUserEventsResponse) {}
+    rpc ConfirmTaskCompletion(ConfirmTaskCompletionRequest) returns (ConfirmTaskCompletionResponse) {}
+    
+    rpc LikeEvent(LikeEventRequest) returns (LikeEventResponse) {}
+    rpc UnlikeEvent(UnlikeEventRequest) returns (UnlikeEventResponse) {}
+    rpc AddEventComment(AddEventCommentRequest) returns (AddEventCommentResponse) {}
+    rpc GetEventComments(GetEventCommentsRequest) returns (GetEventCommentsResponse) {}
+    rpc DeleteEventComment(DeleteEventCommentRequest) returns (DeleteEventCommentResponse) {}
+
 }
 
 message ValidateTokenRequest {
@@ -120,6 +130,8 @@ message Task {
   string flag_color = 17;
   string flag_name = 18;
   int32 display_order = 19;
+  bool proof_needed = 20;
+  string proof_description = 21;
 }
 
 message UpdateTaskRequest {
@@ -129,11 +141,6 @@ message UpdateTaskRequest {
 message UpdateTaskResponse {
   bool success = 1;
   string error = 2;
-}
-
-message CompletionStatus {
-  bool is_completed = 1;
-  string proof_url = 2;
 }
 
 message PrivacySettings {
@@ -258,4 +265,133 @@ message GetUserResponse {
     repeated FriendRequest incoming_requests = 8;
     repeated FriendRequest outgoing_requests = 9;
     string error = 10;
+}
+
+message CompletionStatus {
+  bool is_completed = 1;
+  string proof_url = 2;
+  bool needs_confirmation = 3;
+  bool is_confirmed = 4;
+  string confirmation_user_id = 5;
+  google.protobuf.Timestamp confirmed_at = 6;
+}
+
+enum EventType {
+  NEW_TASKS_ADDED = 0;
+  NEWLY_RECEIVED = 1;
+  NEWLY_COMPLETED = 2;
+  REQUIRES_CONFIRMATION = 3;
+  N_DAY_STREAK = 4;
+  DEADLINE_COMING_UP = 5;
+}
+
+enum EventSize {
+  SMALL = 0;
+  MEDIUM = 1;
+  LARGE = 2;
+}
+
+message Event {
+  string id = 1;
+  string user_id = 2;
+  string target_user_id = 3;
+  EventType type = 4;
+  EventSize size = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  repeated string task_ids = 8;
+  int32 streak_days = 9;
+  int32 likes_count = 10;
+  repeated string liked_by_user_ids = 11;
+  int32 comments_count = 12;
+}
+
+message EventComment {
+  string id = 1;
+  string event_id = 2;
+  string user_id = 3;
+  string content = 4;
+  google.protobuf.Timestamp created_at = 5;
+  bool is_edited = 6;
+  google.protobuf.Timestamp edited_at = 7;
+}
+
+message GetUserEventsRequest {
+  string user_id = 1;
+  int32 limit = 2;
+  bool include_expired = 3;
+}
+
+message GetUserEventsResponse {
+  bool success = 1;
+  repeated Event events = 2;
+  string error = 3;
+}
+
+message ConfirmTaskCompletionRequest {
+  string task_id = 1;
+  string confirmer_id = 2;
+  bool is_confirmed = 3;
+}
+
+message ConfirmTaskCompletionResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message LikeEventRequest {
+  string event_id = 1;
+  string user_id = 2;
+}
+
+message LikeEventResponse {
+  bool success = 1;
+  int32 likes_count = 2;
+  string error = 3;
+}
+
+message UnlikeEventRequest {
+  string event_id = 1;
+  string user_id = 2;
+}
+
+message UnlikeEventResponse {
+  bool success = 1;
+  int32 likes_count = 2;
+  string error = 3;
+}
+
+message AddEventCommentRequest {
+  string event_id = 1;
+  string user_id = 2;
+  string content = 3;
+}
+
+message AddEventCommentResponse {
+  bool success = 1;
+  EventComment comment = 2;
+  string error = 3;
+}
+
+message GetEventCommentsRequest {
+  string event_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message GetEventCommentsResponse {
+  bool success = 1;
+  repeated EventComment comments = 2;
+  int32 total_count = 3;
+  string error = 4;
+}
+
+message DeleteEventCommentRequest {
+  string comment_id = 1;
+  string user_id = 2;
+}
+
+message DeleteEventCommentResponse {
+  bool success = 1;
+  string error = 2;
 }

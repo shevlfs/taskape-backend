@@ -19,6 +19,7 @@ type Server struct {
 	userHandler   *handlers.UserHandler
 	taskHandler   *handlers.TaskHandler
 	friendHandler *handlers.FriendHandler
+	eventHandler  *handlers.EventHandler
 }
 
 func NewServer(pool *pgxpool.Pool) *Server {
@@ -27,6 +28,7 @@ func NewServer(pool *pgxpool.Pool) *Server {
 		userHandler:   handlers.NewUserHandler(pool),
 		taskHandler:   handlers.NewTaskHandler(pool),
 		friendHandler: handlers.NewFriendHandler(pool),
+		eventHandler:  handlers.NewEventHandler(pool),
 	}
 }
 
@@ -96,6 +98,34 @@ func (s *Server) GetUserFriends(ctx context.Context, req *pb.GetUserFriendsReque
 
 func (s *Server) GetFriendRequests(ctx context.Context, req *pb.GetFriendRequestsRequest) (*pb.GetFriendRequestsResponse, error) {
 	return s.friendHandler.GetFriendRequests(ctx, req)
+}
+
+func (s *Server) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest) (*pb.GetUserEventsResponse, error) {
+	return s.eventHandler.GetUserEvents(ctx, req)
+}
+
+func (s *Server) ConfirmTaskCompletion(ctx context.Context, req *pb.ConfirmTaskCompletionRequest) (*pb.ConfirmTaskCompletionResponse, error) {
+	return s.taskHandler.ConfirmTaskCompletion(ctx, req)
+}
+
+func (s *Server) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) (*pb.LikeEventResponse, error) {
+	return s.eventHandler.LikeEvent(ctx, req)
+}
+
+func (s *Server) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventRequest) (*pb.UnlikeEventResponse, error) {
+	return s.eventHandler.UnlikeEvent(ctx, req)
+}
+
+func (s *Server) AddEventComment(ctx context.Context, req *pb.AddEventCommentRequest) (*pb.AddEventCommentResponse, error) {
+	return s.eventHandler.AddEventComment(ctx, req)
+}
+
+func (s *Server) GetEventComments(ctx context.Context, req *pb.GetEventCommentsRequest) (*pb.GetEventCommentsResponse, error) {
+	return s.eventHandler.GetEventComments(ctx, req)
+}
+
+func (s *Server) DeleteEventComment(ctx context.Context, req *pb.DeleteEventCommentRequest) (*pb.DeleteEventCommentResponse, error) {
+	return s.eventHandler.DeleteEventComment(ctx, req)
 }
 
 func (s *Server) Start(port string) error {
