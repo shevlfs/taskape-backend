@@ -12,28 +12,40 @@ import (
 )
 
 func (h *FriendHandler) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest) (*pb.SearchUsersResponse, error) {
-	if req.Query == "" {
-		return nil, fmt.Errorf("search query is required")
-	}
-
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 10
 	}
 
-	rows, err := h.Pool.Query(ctx, `
-        SELECT id, handle, profile_picture, color
-        FROM users
-        WHERE handle ILIKE $1
-        ORDER BY 
-            CASE 
-                WHEN handle ILIKE $2 THEN 0 -- Exact match
-                WHEN handle ILIKE $3 THEN 1 -- Starts with query
-                ELSE 2 -- Contains query
-            END,
-            handle
-        LIMIT $4
-    `, "%"+req.Query+"%", req.Query, req.Query+"%", limit)
+	var query string
+	var args []interface{}
+
+	if req.Query == "" {
+		query = `
+            SELECT id, handle, profile_picture, color
+            FROM users
+            ORDER BY handle
+            LIMIT $1
+        `
+		args = append(args, limit)
+	} else {
+		query = `
+            SELECT id, handle, profile_picture, color
+            FROM users
+            WHERE handle ILIKE $1
+            ORDER BY 
+                CASE 
+                    WHEN handle ILIKE $2 THEN 0 -- Exact match
+                    WHEN handle ILIKE $3 THEN 1 -- Starts with query
+                    ELSE 2 -- Contains query
+                END,
+                handle
+            LIMIT $4
+        `
+		args = append(args, "%"+req.Query+"%", req.Query, req.Query+"%", limit)
+	}
+
+	rows, err := h.Pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search users: %v", err)
 	}
@@ -69,13 +81,19 @@ func (h *FriendHandler) SendFriendRequest(ctx context.Context, req *pb.SendFrien
 		return nil, fmt.Errorf("sender and receiver IDs are required")
 	}
 
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var senderExists, receiverExists bool
-	err := h.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.SenderId).Scan(&senderExists)
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.SenderId).Scan(&senderExists)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check sender existence: %v", err)
 	}
 
-	err = h.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.ReceiverId).Scan(&receiverExists)
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.ReceiverId).Scan(&receiverExists)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check receiver existence: %v", err)
 	}
@@ -95,7 +113,7 @@ func (h *FriendHandler) SendFriendRequest(ctx context.Context, req *pb.SendFrien
 	}
 
 	var alreadyFriends bool
-	err = h.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM user_friends WHERE user_id = $1 AND friend_id = $2)", req.SenderId, req.ReceiverId).Scan(&alreadyFriends)
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM user_friends WHERE user_id = $1 AND friend_id = $2)", req.SenderId, req.ReceiverId).Scan(&alreadyFriends)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check existing friendship: %v", err)
 	}
@@ -107,54 +125,41 @@ func (h *FriendHandler) SendFriendRequest(ctx context.Context, req *pb.SendFrien
 		}, nil
 	}
 
-	var requestId string
-	var status string
-	err = h.Pool.QueryRow(ctx, `
-    SELECT id, status FROM friend_requests 
-    WHERE sender_id = $1 AND receiver_id = $2
-`, req.SenderId, req.ReceiverId).Scan(&requestId, &status)
+	var existingRequestId string
+	err = tx.QueryRow(ctx, `
+        SELECT id FROM friend_requests 
+        WHERE sender_id = $1 AND receiver_id = $2
+    `, req.SenderId, req.ReceiverId).Scan(&existingRequestId)
 
-	if err != nil {
-		if err == pgx.ErrNoRows || err.Error() == pgx.ErrNoRows.Error() {
-			fmt.Printf("No existing request found, will create new one\n")
-		} else {
-			return nil, fmt.Errorf("failed to check existing request: %v", err)
-		}
+	if err != nil && err != pgx.ErrNoRows && err.Error() != pgx.ErrNoRows.Error() {
+		return nil, fmt.Errorf("failed to check existing request: %v", err)
 	}
 
-	if err == nil {
-		if status == "pending" {
-			return &pb.SendFriendRequestResponse{
-				Success:   true,
-				RequestId: requestId,
-				Error:     "Friend request already sent",
-			}, nil
-		} else if status == "rejected" {
-			_, err = h.Pool.Exec(ctx, `
-            UPDATE friend_requests 
-            SET status = 'pending', updated_at = NOW() 
+	if err == nil || (err != pgx.ErrNoRows && err.Error() != pgx.ErrNoRows.Error()) {
+		_, err = tx.Exec(ctx, `
+            DELETE FROM friend_requests 
             WHERE id = $1
-        `, requestId)
+        `, existingRequestId)
 
-			if err != nil {
-				return nil, fmt.Errorf("failed to update friend request: %v", err)
-			}
-
-			return &pb.SendFriendRequestResponse{
-				Success:   true,
-				RequestId: requestId,
-			}, nil
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete existing request: %v", err)
 		}
 	}
 
-	err = h.Pool.QueryRow(ctx, `
-    INSERT INTO friend_requests (sender_id, receiver_id, status) 
-    VALUES ($1, $2, 'pending') 
-    RETURNING id
-`, req.SenderId, req.ReceiverId).Scan(&requestId)
+	var requestId string
+	err = tx.QueryRow(ctx, `
+        INSERT INTO friend_requests (sender_id, receiver_id, status) 
+        VALUES ($1, $2, 'pending') 
+        RETURNING id
+    `, req.SenderId, req.ReceiverId).Scan(&requestId)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create friend request: %v", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return &pb.SendFriendRequestResponse{
@@ -172,9 +177,15 @@ func (h *FriendHandler) RespondToFriendRequest(ctx context.Context, req *pb.Resp
 		return nil, fmt.Errorf("response must be 'accept' or 'reject'")
 	}
 
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var senderId, receiverId string
 	var status string
-	err := h.Pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
         SELECT sender_id, receiver_id, status 
         FROM friend_requests 
         WHERE id = $1
@@ -204,23 +215,16 @@ func (h *FriendHandler) RespondToFriendRequest(ctx context.Context, req *pb.Resp
 		}, nil
 	}
 
-	_, err = h.Pool.Exec(ctx, `
-        UPDATE friend_requests 
-        SET status = $1, updated_at = NOW() 
-        WHERE id = $2
-    `, req.Response, req.RequestId)
+	_, err = tx.Exec(ctx, `
+        DELETE FROM friend_requests
+        WHERE id = $1
+    `, req.RequestId)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to update friend request: %v", err)
+		return nil, fmt.Errorf("failed to delete friend request: %v", err)
 	}
 
 	if req.Response == "accept" {
-		tx, err := h.Pool.Begin(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to begin transaction: %v", err)
-		}
-		defer tx.Rollback(ctx)
-
 		_, err = tx.Exec(ctx, `
             INSERT INTO user_friends (user_id, friend_id) VALUES ($1, $2)
         `, receiverId, senderId)
@@ -234,11 +238,11 @@ func (h *FriendHandler) RespondToFriendRequest(ctx context.Context, req *pb.Resp
 		if err != nil {
 			return nil, fmt.Errorf("failed to create friendship record (sender->receiver): %v", err)
 		}
+	}
 
-		err = tx.Commit(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to commit transaction: %v", err)
-		}
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	return &pb.RespondToFriendRequestResponse{
