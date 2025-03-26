@@ -270,7 +270,7 @@ func (h *TaskHandler) UpdateTaskOrder(ctx context.Context, req *pb.UpdateTaskOrd
 }
 
 func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequest) (*pb.GetUserTasksResponse, error) {
-	log.Printf("GetUserTasks called for user ID: %s", req.UserId)
+	log.Printf("GetUserTasks called for user ID: %s, requester ID: %s", req.UserId, req.RequesterId)
 
 	if req.UserId == "" {
 		log.Printf("ERROR: Empty user ID provided")
@@ -280,17 +280,91 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 		}, nil
 	}
 
-	rows, err := h.Pool.Query(ctx, `
-        SELECT 
-            id, user_id, name, description, created_at, deadline, author, "group", group_id,
-            assigned_to, task_difficulty, custom_hours, mentioned_in_event,
-            is_completed, proof_url, privacy_level, privacy_except_ids,
-            flag_status, flag_color, flag_name, display_order
-        FROM tasks
-        WHERE user_id = $1
-        ORDER BY display_order ASC, created_at DESC
-    `, req.UserId)
+	canViewAllTasks := req.UserId == req.RequesterId
 
+	if !canViewAllTasks && req.RequesterId != "" {
+		var isFriend bool
+		err := h.Pool.QueryRow(ctx, `
+            SELECT EXISTS(
+                SELECT 1 FROM user_friends 
+                WHERE user_id = $1::INTEGER AND friend_id = $2::INTEGER
+            )
+        `, req.UserId, req.RequesterId).Scan(&isFriend)
+
+		if err != nil {
+			log.Printf("ERROR checking friendship: %v", err)
+		} else {
+			log.Printf("Friendship status between %s and %s: %v", req.UserId, req.RequesterId, isFriend)
+		}
+	}
+
+	var query string
+	var args []interface{}
+
+	if req.UserId == req.RequesterId {
+		// If viewing own tasks, get everything
+		query = `
+            SELECT 
+                id, user_id, name, description, created_at, deadline, author, "group", group_id,
+                assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+                is_completed, proof_url, privacy_level, privacy_except_ids,
+                flag_status, flag_color, flag_name, display_order
+            FROM tasks
+            WHERE user_id = $1
+        `
+		args = append(args, req.UserId)
+	} else if req.RequesterId == "" {
+		// If no requester_id (anonymous), only get public tasks
+		query = `
+            SELECT 
+                id, user_id, name, description, created_at, deadline, author, "group", group_id,
+                assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+                is_completed, proof_url, privacy_level, privacy_except_ids,
+                flag_status, flag_color, flag_name, display_order
+            FROM tasks
+            WHERE user_id = $1 AND privacy_level = 'everyone'
+        `
+		args = append(args, req.UserId)
+	} else {
+		// For authenticated users (potential friends)
+		query = `
+            SELECT 
+                id, user_id, name, description, created_at, deadline, author, "group", group_id,
+                assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+                is_completed, proof_url, privacy_level, privacy_except_ids,
+                flag_status, flag_color, flag_name, display_order
+            FROM tasks
+            WHERE user_id = $1 
+            AND (
+                -- Everyone can see tasks with 'everyone' privacy level
+                privacy_level = 'everyone'
+                
+                -- Friends can see 'friends-only' tasks
+                OR (
+                    privacy_level = 'friends-only' 
+                    AND EXISTS(
+                        SELECT 1 FROM user_friends 
+                        WHERE user_id = $1::INTEGER 
+                        AND friend_id = $2::INTEGER
+                    )
+                )
+                
+                -- People not in the 'except' list can see these tasks
+                OR (
+                    privacy_level = 'except' 
+                    AND NOT($2::TEXT = ANY(privacy_except_ids))
+                )
+            )
+            -- Never show 'noone' tasks to others
+            AND privacy_level != 'noone'
+        `
+		args = append(args, req.UserId, req.RequesterId)
+	}
+
+	query += " ORDER BY display_order ASC, created_at DESC"
+
+	// Execute the query
+	rows, err := h.Pool.Query(ctx, query, args...)
 	if err != nil {
 		log.Printf("ERROR querying tasks for user %s: %v", req.UserId, err)
 		return &pb.GetUserTasksResponse{
@@ -300,6 +374,7 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 	}
 	defer rows.Close()
 
+	// Process the results (the rest of the function remains the same)
 	var tasks []*pb.Task
 	for rows.Next() {
 		var (
@@ -390,7 +465,8 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 		}, nil
 	}
 
-	log.Printf("Successfully fetched %d tasks for user %s", len(tasks), req.UserId)
+	log.Printf("Successfully fetched %d tasks for user %s (requested by %s)",
+		len(tasks), req.UserId, req.RequesterId)
 	return &pb.GetUserTasksResponse{
 		Success: true,
 		Tasks:   tasks,
