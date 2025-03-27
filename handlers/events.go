@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,7 +78,126 @@ func stringArrayToPostgresArray(arr []string) string {
 	return result
 }
 
-// GetUserEvents retrieves events for a user
+func (h *EventHandler) createRandomEventForFriend(ctx context.Context, friendID int, targetUserID int) (*pb.Event, error) {
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Get some random tasks for this friend, if available
+	var taskIDs []string
+	taskRows, err := tx.Query(ctx, `
+		SELECT id FROM tasks 
+		WHERE user_id = $1::text AND privacy_level = 'everyone'
+		ORDER BY RANDOM() LIMIT 3
+	`, strconv.Itoa(friendID))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tasks: %v", err)
+	}
+
+	for taskRows.Next() {
+		var taskID string
+		if err := taskRows.Scan(&taskID); err != nil {
+			taskRows.Close()
+			return nil, fmt.Errorf("failed to scan task ID: %v", err)
+		}
+		taskIDs = append(taskIDs, taskID)
+	}
+	taskRows.Close()
+
+	// Choose a random event type
+	eventTypes := []string{
+		"new_tasks_added",
+		"n_day_streak",
+		"deadline_coming_up",
+	}
+	eventType := eventTypes[rand.Intn(len(eventTypes))]
+
+	// If no tasks found and we chose a task-related event type, fallback to streak
+	if len(taskIDs) == 0 && (eventType == "new_tasks_added" || eventType == "deadline_coming_up") {
+		eventType = "n_day_streak"
+	}
+
+	// Create the event
+	eventID := uuid.New().String()
+	now := time.Now()
+	expiresAt := now.Add(24 * time.Hour)
+	streakDays := rand.Intn(10) + 1 // Random streak between 1-10 days
+
+	// Choose random event size
+	sizes := []string{"small", "medium", "large"}
+	eventSize := sizes[rand.Intn(len(sizes))]
+
+	// Insert the event with task IDs
+	_, err = tx.Exec(ctx, `
+		INSERT INTO events (
+			id, user_id, target_user_id, event_type, event_size, 
+			created_at, expires_at, task_ids, streak_days, 
+			likes_count, comments_count
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0
+		)
+	`, eventID, friendID, targetUserID, eventType, eventSize, now, expiresAt, taskIDs, streakDays)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert event: %v", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	// Convert event type to protobuf enum
+	pbEventType := pb.EventType_NEW_TASKS_ADDED
+	switch eventType {
+	case "new_tasks_added":
+		pbEventType = pb.EventType_NEW_TASKS_ADDED
+	case "newly_received":
+		pbEventType = pb.EventType_NEWLY_RECEIVED
+	case "newly_completed":
+		pbEventType = pb.EventType_NEWLY_COMPLETED
+	case "requires_confirmation":
+		pbEventType = pb.EventType_REQUIRES_CONFIRMATION
+	case "n_day_streak":
+		pbEventType = pb.EventType_N_DAY_STREAK
+	case "deadline_coming_up":
+		pbEventType = pb.EventType_DEADLINE_COMING_UP
+	}
+
+	// Convert event size to protobuf enum
+	pbEventSize := pb.EventSize_MEDIUM
+	switch eventSize {
+	case "small":
+		pbEventSize = pb.EventSize_SMALL
+	case "medium":
+		pbEventSize = pb.EventSize_MEDIUM
+	case "large":
+		pbEventSize = pb.EventSize_LARGE
+	}
+
+	// Create and return the protobuf event
+	event := &pb.Event{
+		Id:             eventID,
+		UserId:         strconv.Itoa(friendID),
+		TargetUserId:   strconv.Itoa(targetUserID),
+		Type:           pbEventType,
+		Size:           pbEventSize,
+		CreatedAt:      timestamppb.New(now),
+		ExpiresAt:      timestamppb.New(expiresAt),
+		TaskIds:        taskIDs,
+		StreakDays:     int32(streakDays),
+		LikesCount:     0,
+		CommentsCount:  0,
+		LikedByUserIds: []string{},
+	}
+
+	return event, nil
+}
+
+// GetUserEvents retrieves events for a user, ensuring one event per friend
 func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest) (*pb.GetUserEventsResponse, error) {
 	if req.UserId == "" {
 		return &pb.GetUserEventsResponse{
@@ -90,122 +211,170 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		limit = int(req.Limit)
 	}
 
-	var query string
-	var args []interface{}
-
-	if req.IncludeExpired {
-		query = `
-			SELECT 
-				e.id, e.user_id, e.target_user_id, e.event_type, e.event_size, 
-				e.created_at, e.expires_at, e.task_ids, e.streak_days, 
-				e.likes_count, e.comments_count,
-				ARRAY(
-					SELECT el.user_id::text 
-					FROM event_likes el 
-					WHERE el.event_id = e.id
-				) as liked_by_user_ids
-			FROM events e
-			WHERE e.target_user_id = $1
-			ORDER BY e.created_at DESC
-			LIMIT $2
-		`
-		args = []interface{}{req.UserId, limit}
-	} else {
-		query = `
-			SELECT 
-				e.id, e.user_id, e.target_user_id, e.event_type, e.event_size, 
-				e.created_at, e.expires_at, e.task_ids, e.streak_days, 
-				e.likes_count, e.comments_count,
-				ARRAY(
-					SELECT el.user_id::text 
-					FROM event_likes el 
-					WHERE el.event_id = e.id
-				) as liked_by_user_ids
-			FROM events e
-			WHERE e.target_user_id = $1 AND (e.expires_at IS NULL OR e.expires_at > NOW())
-			ORDER BY e.created_at DESC
-			LIMIT $2
-		`
-		args = []interface{}{req.UserId, limit}
-	}
-
-	rows, err := h.Pool.Query(ctx, query, args...)
+	// Convert userID to integer
+	userIDInt, err := strconv.Atoi(req.UserId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query events: %v", err)
+		return nil, fmt.Errorf("invalid user ID format: %v", err)
 	}
-	defer rows.Close()
+
+	// First, get the user's friend IDs
+	friendRows, err := h.Pool.Query(ctx, `
+		SELECT friend_id FROM user_friends WHERE user_id = $1
+	`, userIDInt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query friends: %v", err)
+	}
+	defer friendRows.Close()
+
+	var friendIDs []int
+	for friendRows.Next() {
+		var friendID int
+		if err := friendRows.Scan(&friendID); err != nil {
+			return nil, fmt.Errorf("failed to scan friend row: %v", err)
+		}
+		friendIDs = append(friendIDs, friendID)
+	}
+
+	// Check if user has any friends
+	if len(friendIDs) == 0 {
+		return &pb.GetUserEventsResponse{
+			Success: true,
+			Events:  []*pb.Event{},
+		}, nil
+	}
+
+	// Define how recent an event should be to not require a new one
+	threeHoursAgo := time.Now().Add(-3 * time.Hour)
 
 	var events []*pb.Event
-	for rows.Next() {
+	eventsMap := make(map[int]*pb.Event) // Map of friendID to their event
+
+	// For each friend, get their most recent event or create a new one
+	for _, friendID := range friendIDs {
+		// Try to get a recent event - use separate query for liked_by_user_ids to avoid type issues
+		row := h.Pool.QueryRow(ctx, `
+			SELECT 
+				id, user_id, target_user_id, event_type, event_size, 
+				created_at, expires_at, task_ids, streak_days, 
+				likes_count, comments_count
+			FROM events
+			WHERE user_id = $1 
+			AND target_user_id = $2
+			AND created_at > $3
+			ORDER BY created_at DESC
+			LIMIT 1
+		`, friendID, userIDInt, threeHoursAgo)
+
 		var (
-			id, userID, targetUserID, eventTypeStr, eventSizeStr string
-			createdAt                                            time.Time
-			expiresAtPtr                                         *time.Time
-			taskIDsArray                                         []string
-			streakDays                                           int32
-			likesCount, commentsCount                            int32
-			likedByUserIds                                       []string
+			id            string
+			userID        int
+			targetUserID  int
+			eventTypeStr  string
+			eventSizeStr  string
+			createdAt     time.Time
+			expiresAtPtr  *time.Time
+			taskIDsArray  []string
+			streakDays    int32
+			likesCount    int32
+			commentsCount int32
 		)
 
-		if err := rows.Scan(
+		err := row.Scan(
 			&id, &userID, &targetUserID, &eventTypeStr, &eventSizeStr,
 			&createdAt, &expiresAtPtr, &taskIDsArray, &streakDays,
-			&likesCount, &commentsCount, &likedByUserIds,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan event row: %v", err)
-		}
+			&likesCount, &commentsCount,
+		)
 
-		// Convert string event type to enum
-		eventType := pb.EventType_NEW_TASKS_ADDED
-		switch eventTypeStr {
-		case "new_tasks_added":
-			eventType = pb.EventType_NEW_TASKS_ADDED
-		case "newly_received":
-			eventType = pb.EventType_NEWLY_RECEIVED
-		case "newly_completed":
-			eventType = pb.EventType_NEWLY_COMPLETED
-		case "requires_confirmation":
-			eventType = pb.EventType_REQUIRES_CONFIRMATION
-		case "n_day_streak":
-			eventType = pb.EventType_N_DAY_STREAK
-		case "deadline_coming_up":
-			eventType = pb.EventType_DEADLINE_COMING_UP
-		}
+		if err == nil {
+			// Get liked_by_user_ids separately to avoid type issues
+			var likedByUserIds []string
+			likeRows, err := h.Pool.Query(ctx, `
+				SELECT user_id::text 
+				FROM event_likes 
+				WHERE event_id = $1::uuid
+			`, id)
 
-		// Convert string event size to enum
-		eventSize := pb.EventSize_MEDIUM
-		switch eventSizeStr {
-		case "small":
-			eventSize = pb.EventSize_SMALL
-		case "medium":
-			eventSize = pb.EventSize_MEDIUM
-		case "large":
-			eventSize = pb.EventSize_LARGE
-		}
+			if err == nil {
+				defer likeRows.Close()
+				for likeRows.Next() {
+					var userID string
+					if err := likeRows.Scan(&userID); err == nil {
+						likedByUserIds = append(likedByUserIds, userID)
+					}
+				}
+			}
 
-		event := &pb.Event{
-			Id:             id,
-			UserId:         userID,
-			TargetUserId:   targetUserID,
-			Type:           eventType,
-			Size:           eventSize,
-			CreatedAt:      timestamppb.New(createdAt),
-			TaskIds:        taskIDsArray,
-			StreakDays:     streakDays,
-			LikesCount:     likesCount,
-			CommentsCount:  commentsCount,
-			LikedByUserIds: likedByUserIds,
-		}
+			// Convert string event type to enum
+			eventType := pb.EventType_NEW_TASKS_ADDED
+			switch eventTypeStr {
+			case "new_tasks_added":
+				eventType = pb.EventType_NEW_TASKS_ADDED
+			case "newly_received":
+				eventType = pb.EventType_NEWLY_RECEIVED
+			case "newly_completed":
+				eventType = pb.EventType_NEWLY_COMPLETED
+			case "requires_confirmation":
+				eventType = pb.EventType_REQUIRES_CONFIRMATION
+			case "n_day_streak":
+				eventType = pb.EventType_N_DAY_STREAK
+			case "deadline_coming_up":
+				eventType = pb.EventType_DEADLINE_COMING_UP
+			}
 
-		if expiresAtPtr != nil {
-			event.ExpiresAt = timestamppb.New(*expiresAtPtr)
-		}
+			// Convert string event size to enum
+			eventSize := pb.EventSize_MEDIUM
+			switch eventSizeStr {
+			case "small":
+				eventSize = pb.EventSize_SMALL
+			case "medium":
+				eventSize = pb.EventSize_MEDIUM
+			case "large":
+				eventSize = pb.EventSize_LARGE
+			}
 
+			event := &pb.Event{
+				Id:             id,
+				UserId:         strconv.Itoa(userID),
+				TargetUserId:   strconv.Itoa(targetUserID),
+				Type:           eventType,
+				Size:           eventSize,
+				CreatedAt:      timestamppb.New(createdAt),
+				TaskIds:        taskIDsArray,
+				StreakDays:     streakDays,
+				LikesCount:     likesCount,
+				CommentsCount:  commentsCount,
+				LikedByUserIds: likedByUserIds,
+			}
+
+			if expiresAtPtr != nil {
+				event.ExpiresAt = timestamppb.New(*expiresAtPtr)
+			}
+
+			eventsMap[friendID] = event
+		} else if err == pgx.ErrNoRows {
+			// No recent event found, create a new one
+			newEvent, err := h.createRandomEventForFriend(ctx, friendID, userIDInt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create event for friend %d: %v", friendID, err)
+			}
+			eventsMap[friendID] = newEvent
+		} else {
+			return nil, fmt.Errorf("error querying recent event for friend %d: %v", friendID, err)
+		}
+	}
+
+	// Collect all events into a slice
+	for _, event := range eventsMap {
 		events = append(events, event)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating event rows: %v", err)
+	// Limit the total number of events if needed
+	if len(events) > limit {
+		// Sort by creation time first to get the most recent ones
+		sort.Slice(events, func(i, j int) bool {
+			return events[i].CreatedAt.AsTime().After(events[j].CreatedAt.AsTime())
+		})
+		events = events[:limit]
 	}
 
 	return &pb.GetUserEventsResponse{
@@ -215,12 +384,19 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 }
 
 // LikeEvent adds a like to an event
+// LikeEvent adds a like to an event
 func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) (*pb.LikeEventResponse, error) {
 	if req.EventId == "" || req.UserId == "" {
 		return &pb.LikeEventResponse{
 			Success: false,
 			Error:   "Event ID and User ID are required",
 		}, nil
+	}
+
+	// Convert user ID to integer
+	userIDInt, err := strconv.Atoi(req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID format: %v", err)
 	}
 
 	tx, err := h.Pool.Begin(ctx)
@@ -232,7 +408,7 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 	// Check if event exists
 	var exists bool
 	err = tx.QueryRow(ctx, `
-		SELECT EXISTS(SELECT 1 FROM events WHERE id = $1)
+		SELECT EXISTS(SELECT 1 FROM events WHERE id = $1::uuid)
 	`, req.EventId).Scan(&exists)
 
 	if err != nil {
@@ -249,8 +425,8 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 	// Check if user has already liked this event
 	var alreadyLiked bool
 	err = tx.QueryRow(ctx, `
-		SELECT EXISTS(SELECT 1 FROM event_likes WHERE event_id = $1 AND user_id = $2)
-	`, req.EventId, req.UserId).Scan(&alreadyLiked)
+		SELECT EXISTS(SELECT 1 FROM event_likes WHERE event_id = $1::uuid AND user_id = $2)
+	`, req.EventId, userIDInt).Scan(&alreadyLiked)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if user already liked event: %v", err)
@@ -260,7 +436,7 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 		// User has already liked this event
 		var likesCount int32
 		err = tx.QueryRow(ctx, `
-			SELECT likes_count FROM events WHERE id = $1
+			SELECT likes_count FROM events WHERE id = $1::uuid
 		`, req.EventId).Scan(&likesCount)
 
 		if err != nil {
@@ -276,17 +452,28 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 	// Add the like
 	_, err = tx.Exec(ctx, `
 		INSERT INTO event_likes (event_id, user_id)
-		VALUES ($1, $2)
-	`, req.EventId, req.UserId)
+		VALUES ($1::uuid, $2)
+	`, req.EventId, userIDInt)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to like event: %v", err)
 	}
 
+	// Update the likes count in the events table
+	_, err = tx.Exec(ctx, `
+		UPDATE events 
+		SET likes_count = likes_count + 1
+		WHERE id = $1::uuid
+	`, req.EventId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update likes count: %v", err)
+	}
+
 	// Get updated likes count
 	var likesCount int32
 	err = tx.QueryRow(ctx, `
-		SELECT likes_count FROM events WHERE id = $1
+		SELECT likes_count FROM events WHERE id = $1::uuid
 	`, req.EventId).Scan(&likesCount)
 
 	if err != nil {
@@ -304,12 +491,19 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 }
 
 // UnlikeEvent removes a like from an event
+// UnlikeEvent removes a like from an event
 func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventRequest) (*pb.UnlikeEventResponse, error) {
 	if req.EventId == "" || req.UserId == "" {
 		return &pb.UnlikeEventResponse{
 			Success: false,
 			Error:   "Event ID and User ID are required",
 		}, nil
+	}
+
+	// Convert user ID to integer
+	userIDInt, err := strconv.Atoi(req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID format: %v", err)
 	}
 
 	tx, err := h.Pool.Begin(ctx)
@@ -321,8 +515,8 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 	// Check if the like exists
 	var exists bool
 	err = tx.QueryRow(ctx, `
-		SELECT EXISTS(SELECT 1 FROM event_likes WHERE event_id = $1 AND user_id = $2)
-	`, req.EventId, req.UserId).Scan(&exists)
+		SELECT EXISTS(SELECT 1 FROM event_likes WHERE event_id = $1::uuid AND user_id = $2)
+	`, req.EventId, userIDInt).Scan(&exists)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if like exists: %v", err)
@@ -332,7 +526,7 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 		// User hasn't liked this event
 		var likesCount int32
 		err = tx.QueryRow(ctx, `
-			SELECT likes_count FROM events WHERE id = $1
+			SELECT likes_count FROM events WHERE id = $1::uuid
 		`, req.EventId).Scan(&likesCount)
 
 		if err != nil {
@@ -348,17 +542,28 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 	// Remove the like
 	_, err = tx.Exec(ctx, `
 		DELETE FROM event_likes 
-		WHERE event_id = $1 AND user_id = $2
-	`, req.EventId, req.UserId)
+		WHERE event_id = $1::uuid AND user_id = $2
+	`, req.EventId, userIDInt)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to unlike event: %v", err)
 	}
 
+	// Update the likes count in the events table
+	_, err = tx.Exec(ctx, `
+		UPDATE events 
+		SET likes_count = GREATEST(likes_count - 1, 0)
+		WHERE id = $1::uuid
+	`, req.EventId)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update likes count: %v", err)
+	}
+
 	// Get updated likes count
 	var likesCount int32
 	err = tx.QueryRow(ctx, `
-		SELECT likes_count FROM events WHERE id = $1
+		SELECT likes_count FROM events WHERE id = $1::uuid
 	`, req.EventId).Scan(&likesCount)
 
 	if err != nil {
