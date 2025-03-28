@@ -24,6 +24,7 @@ func (h *FriendHandler) SearchUsers(ctx context.Context, req *pb.SearchUsersRequ
 		query = `
             SELECT id, handle, profile_picture, color
             FROM users
+			WHERE handle IS NOT NULL
             ORDER BY handle
             LIMIT $1
         `
