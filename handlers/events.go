@@ -62,7 +62,6 @@ func (h *TaskHandler) CreateEventForTasks(ctx context.Context, userID string, ta
 	return tx.Commit(ctx)
 }
 
-// stringArrayToPostgresArray converts a string slice to a comma-separated string for Postgres array
 func stringArrayToPostgresArray(arr []string) string {
 	if len(arr) == 0 {
 		return ""
@@ -126,7 +125,6 @@ func (h *EventHandler) createRandomEventForFriend(ctx context.Context, friendID 
 	expiresAt := now.Add(24 * time.Hour)
 	streakDays := rand.Intn(10) + 1 // Random streak between 1-10 days
 
-	// Choose random event size
 	sizes := []string{"small", "medium", "large"}
 	eventSize := sizes[rand.Intn(len(sizes))]
 
@@ -145,12 +143,10 @@ func (h *EventHandler) createRandomEventForFriend(ctx context.Context, friendID 
 		return nil, fmt.Errorf("failed to insert event: %v", err)
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
-	// Convert event type to protobuf enum
 	pbEventType := pb.EventType_NEW_TASKS_ADDED
 	switch eventType {
 	case "new_tasks_added":
@@ -167,7 +163,6 @@ func (h *EventHandler) createRandomEventForFriend(ctx context.Context, friendID 
 		pbEventType = pb.EventType_DEADLINE_COMING_UP
 	}
 
-	// Convert event size to protobuf enum
 	pbEventSize := pb.EventSize_MEDIUM
 	switch eventSize {
 	case "small":
@@ -178,7 +173,6 @@ func (h *EventHandler) createRandomEventForFriend(ctx context.Context, friendID 
 		pbEventSize = pb.EventSize_LARGE
 	}
 
-	// Create and return the protobuf event
 	event := &pb.Event{
 		Id:             eventID,
 		UserId:         strconv.Itoa(friendID),
@@ -197,7 +191,6 @@ func (h *EventHandler) createRandomEventForFriend(ctx context.Context, friendID 
 	return event, nil
 }
 
-// GetUserEvents retrieves events for a user, ensuring one event per friend
 func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest) (*pb.GetUserEventsResponse, error) {
 	if req.UserId == "" {
 		return &pb.GetUserEventsResponse{
@@ -211,13 +204,11 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		limit = int(req.Limit)
 	}
 
-	// Convert userID to integer
 	userIDInt, err := strconv.Atoi(req.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID format: %v", err)
 	}
 
-	// First, get the user's friend IDs
 	friendRows, err := h.Pool.Query(ctx, `
 		SELECT friend_id FROM user_friends WHERE user_id = $1
 	`, userIDInt)
@@ -235,7 +226,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		friendIDs = append(friendIDs, friendID)
 	}
 
-	// Check if user has any friends
 	if len(friendIDs) == 0 {
 		return &pb.GetUserEventsResponse{
 			Success: true,
@@ -243,15 +233,12 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		}, nil
 	}
 
-	// Define how recent an event should be to not require a new one
 	threeHoursAgo := time.Now().Add(-3 * time.Hour)
 
 	var events []*pb.Event
-	eventsMap := make(map[int]*pb.Event) // Map of friendID to their event
+	eventsMap := make(map[int]*pb.Event)
 
-	// For each friend, get their most recent event or create a new one
 	for _, friendID := range friendIDs {
-		// Try to get a recent event - use separate query for liked_by_user_ids to avoid type issues
 		row := h.Pool.QueryRow(ctx, `
 			SELECT 
 				id, user_id, target_user_id, event_type, event_size, 
@@ -286,7 +273,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		)
 
 		if err == nil {
-			// Get liked_by_user_ids separately to avoid type issues
 			var likedByUserIds []string
 			likeRows, err := h.Pool.Query(ctx, `
 				SELECT user_id::text 
@@ -304,7 +290,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 				}
 			}
 
-			// Convert string event type to enum
 			eventType := pb.EventType_NEW_TASKS_ADDED
 			switch eventTypeStr {
 			case "new_tasks_added":
@@ -383,7 +368,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 	}, nil
 }
 
-// LikeEvent adds a like to an event
 // LikeEvent adds a like to an event
 func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) (*pb.LikeEventResponse, error) {
 	if req.EventId == "" || req.UserId == "" {
