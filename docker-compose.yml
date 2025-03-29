@@ -5,8 +5,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "50051:50051"
-    volumes:
-      - .:/app
     environment:
       - ENV=development
       - DEBUG=true
@@ -15,11 +13,11 @@ services:
       - DB_PASSWORD=cBfN6qYiz6HCwIa
       - DB_NAME=taskape
       - DB_PORT=5432
+      - JWT_SECRET=your-secret-key-here
     depends_on:
       postgres:
         condition: service_healthy
-    command: go run main.go
-      # Changed from server/main.go to main.go
+
   postgres:
     image: postgres:16-alpine
     environment:
