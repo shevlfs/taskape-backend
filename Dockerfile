@@ -24,13 +24,6 @@ WORKDIR /app
 # Copy the compiled binary from builder stage
 COPY --from=builder /app/taskape-backend .
 
-# Copy the schema.sql file
-COPY schema.sql .
-
-# Copy the entrypoint script
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
-
 # Expose port
 EXPOSE 50051
 
