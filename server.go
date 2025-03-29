@@ -129,7 +129,7 @@ func (s *Server) DeleteEventComment(ctx context.Context, req *pb.DeleteEventComm
 }
 
 func (s *Server) Start(port string) error {
-	lis, err := net.Listen("tcp", ":"+port)
+	lis, err := net.Listen("tcp", "0.0.0.0:"+port)
 	if err != nil {
 		return err
 	}

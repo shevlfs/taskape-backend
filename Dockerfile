@@ -16,5 +16,4 @@ COPY --from=builder /app/taskape-backend .
 
 EXPOSE 50051
 
-
 CMD ["./taskape-backend"]
