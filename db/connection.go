@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,6 +27,8 @@ func Connect(cfg Config) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse pool config: %v", err)
 	}
+
+	poolConfig.MaxConns = int32(runtime.NumCPU() * 4)
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
