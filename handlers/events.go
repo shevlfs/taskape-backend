@@ -450,7 +450,7 @@ func canViewEvent(event *pb.Event, viewerID int, friendIDs []int) bool {
 }
 
 // Helper function to generate an event for a user
-func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, userID int, targetUserID int) (*pb.Event, error) {
+func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, userID int, _ int) (*pb.Event, error) {
 	// Check if the user already has a recent event (last 24 hours)
 	var recentEventExists bool
 	err := tx.QueryRow(ctx, `
