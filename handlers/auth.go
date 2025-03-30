@@ -69,7 +69,8 @@ func (h *AuthHandler) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequ
 	if err != nil {
 		return nil, fmt.Errorf("database query failed: %v", err)
 	}
-	var existingID int64 = -1
+
+	var existingID int64
 	if !profileExists {
 		phoneCheckQuery := `SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)`
 		var phoneExists bool
@@ -77,12 +78,19 @@ func (h *AuthHandler) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequ
 		if err != nil {
 			return nil, fmt.Errorf("database query failed: %v", err)
 		}
+
 		if !phoneExists {
 			var erri error
 			_, erri = tx.Exec(ctx, "INSERT INTO users (phone) VALUES ($1)", req.Phone)
 			if erri != nil {
 				return nil, fmt.Errorf("insert failed: %v", erri)
 			}
+		}
+
+		// Add this to retrieve the user ID even when profile doesn't exist
+		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user ID: %v", err)
 		}
 	} else {
 		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingID)
