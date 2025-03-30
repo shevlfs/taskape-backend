@@ -856,6 +856,8 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
         flag_color = $12,
         flag_name = $13,
         display_order = $14,
+		proof_needed = $18,
+		proof_description = $19,
         needs_confirmation = $15
     WHERE id = $16 AND user_id = $17
     RETURNING id
@@ -876,7 +878,8 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 		req.Task.DisplayOrder,
 		needsConfirmation,
 		req.Task.Id,
-		req.Task.UserId,
+		req.Task.UserId, req.Task.ProofNeeded,
+		req.Task.ProofDescription,
 	)
 
 	if err != nil {
@@ -893,14 +896,12 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 
 	// Handle event creation based on task status changes
 	if isBeingCompleted {
-		if needsConfirmation {
+		if req.Task.ProofNeeded {
 			// Create "requires_confirmation" event
 			eventID := uuid.New().String()
 			now := time.Now()
-			expiresAt := now.Add(7 * 24 * time.Hour) // Expire in 7 days if not confirmed
-
-			// Choose a random event size
-			sizes := []string{"small", "medium", "large"}
+			expiresAt := now.Add(3 * 24 * time.Hour)
+			sizes := []string{"medium", "large"}
 			eventSize := sizes[rand.Intn(len(sizes))]
 
 			_, err = tx.Exec(ctx, `
@@ -910,7 +911,7 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 				) VALUES (
 					$1, $2, $3, 'requires_confirmation', $4, $5, $6, $7, 0, 0
 				)
-			`, eventID, req.Task.UserId, req.Task.UserId, eventSize, now, expiresAt, []string{req.Task.Id})
+			`, eventID, req.Task.UserId, req.Task.UserId, eventSize, now, expiresAt, []string{strings.ToLower(req.Task.Id)})
 
 			if err != nil {
 				log.Printf("failed to create requires_confirmation event: %v", err)

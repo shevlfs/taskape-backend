@@ -71,9 +71,18 @@ func (h *AuthHandler) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequ
 	}
 	var existingID int64 = -1
 	if !profileExists {
-		_, err = tx.Exec(ctx, "INSERT INTO users (phone) VALUES ($1)", req.Phone)
+		phoneCheckQuery := `SELECT EXISTS(SELECT 1 FROM users WHERE phone = $1)`
+		var phoneExists bool
+		err = tx.QueryRow(ctx, phoneCheckQuery, req.Phone).Scan(&phoneExists)
 		if err != nil {
-			return nil, fmt.Errorf("insert failed: %v", err)
+			return nil, fmt.Errorf("database query failed: %v", err)
+		}
+		if !phoneExists {
+			var erri error
+			_, erri = tx.Exec(ctx, "INSERT INTO users (phone) VALUES ($1)", req.Phone)
+			if erri != nil {
+				return nil, fmt.Errorf("insert failed: %v", erri)
+			}
 		}
 	} else {
 		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingID)
