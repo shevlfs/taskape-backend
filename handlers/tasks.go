@@ -483,7 +483,8 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
                 id, user_id, name, description, created_at, deadline, author, "group", group_id,
                 assigned_to, task_difficulty, custom_hours, mentioned_in_event,
                 is_completed, proof_url, privacy_level, privacy_except_ids,
-                flag_status, flag_color, flag_name, display_order
+                flag_status, flag_color, flag_name, display_order,
+                needs_confirmation, is_confirmed, confirmation_user_id
             FROM tasks
             WHERE user_id = $1
         `
@@ -494,7 +495,8 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
                 id, user_id, name, description, created_at, deadline, author, "group", group_id,
                 assigned_to, task_difficulty, custom_hours, mentioned_in_event,
                 is_completed, proof_url, privacy_level, privacy_except_ids,
-                flag_status, flag_color, flag_name, display_order
+                flag_status, flag_color, flag_name, display_order,
+                needs_confirmation, is_confirmed, confirmation_user_id
             FROM tasks
             WHERE user_id = $1 AND privacy_level = 'everyone'
         `
@@ -505,7 +507,8 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
                 id, user_id, name, description, created_at, deadline, author, "group", group_id,
                 assigned_to, task_difficulty, custom_hours, mentioned_in_event,
                 is_completed, proof_url, privacy_level, privacy_except_ids,
-                flag_status, flag_color, flag_name, display_order
+                flag_status, flag_color, flag_name, display_order,
+                needs_confirmation, is_confirmed, confirmation_user_id
             FROM tasks
             WHERE user_id = $1 
             AND (
@@ -559,6 +562,9 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 			proofURL, flagColor, flagName                                                       string
 			proofURLPtr, flagColorPtr, flagNamePtr                                              *string
 			displayOrder                                                                        int32
+			needsConfirmation, isConfirmed                                                      bool
+			confirmationUserID                                                                  string
+			confirmationUserIDPtr                                                               *string
 		)
 
 		err := rows.Scan(
@@ -566,6 +572,7 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 			&assignedTo, &taskDifficulty, &customHoursPtr, &mentionedInEvent,
 			&isCompleted, &proofURLPtr, &privacyLevel, &exceptIDs,
 			&flagStatus, &flagColorPtr, &flagNamePtr, &displayOrder,
+			&needsConfirmation, &isConfirmed, &confirmationUserIDPtr,
 		)
 		if err != nil {
 			log.Printf("ERROR scanning task row: %v", err)
@@ -597,6 +604,10 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 			flagName = *flagNamePtr
 		}
 
+		if confirmationUserIDPtr != nil {
+			confirmationUserID = *confirmationUserIDPtr
+		}
+
 		task := &pb.Task{
 			Id:               id,
 			UserId:           userID,
@@ -612,8 +623,11 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 			CustomHours:      customHours,
 			MentionedInEvent: mentionedInEvent,
 			Completion: &pb.CompletionStatus{
-				IsCompleted: isCompleted,
-				ProofUrl:    proofURL,
+				IsCompleted:      isCompleted,
+				ProofUrl:         proofURL,
+				NeedsConfirmation: needsConfirmation,
+				IsConfirmed:      isConfirmed,
+				ConfirmationUserId: confirmationUserID,
 			},
 			Privacy: &pb.PrivacySettings{
 				Level:     privacyLevel,
