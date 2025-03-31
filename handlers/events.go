@@ -674,17 +674,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 		return nil, fmt.Errorf("failed to like event: %v", err)
 	}
 
-	// Update the likes count in the events table
-	_, err = tx.Exec(ctx, `
-		UPDATE events 
-		SET likes_count = likes_count + 1
-		WHERE id = $1::uuid
-	`, req.EventId)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to update likes count: %v", err)
-	}
-
 	// Get updated likes count
 	var likesCount int32
 	err = tx.QueryRow(ctx, `
@@ -761,17 +750,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to unlike event: %v", err)
-	}
-
-	// Update the likes count in the events table
-	_, err = tx.Exec(ctx, `
-		UPDATE events 
-		SET likes_count = GREATEST(likes_count - 1, 0)
-		WHERE id = $1::uuid
-	`, req.EventId)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to update likes count: %v", err)
 	}
 
 	// Get updated likes count
