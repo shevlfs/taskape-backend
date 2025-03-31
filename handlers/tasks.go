@@ -623,10 +623,10 @@ func (h *TaskHandler) GetUserTasks(ctx context.Context, req *pb.GetUserTasksRequ
 			CustomHours:      customHours,
 			MentionedInEvent: mentionedInEvent,
 			Completion: &pb.CompletionStatus{
-				IsCompleted:      isCompleted,
-				ProofUrl:         proofURL,
-				NeedsConfirmation: needsConfirmation,
-				IsConfirmed:      isConfirmed,
+				IsCompleted:        isCompleted,
+				ProofUrl:           proofURL,
+				NeedsConfirmation:  needsConfirmation,
+				IsConfirmed:        isConfirmed,
 				ConfirmationUserId: confirmationUserID,
 			},
 			Privacy: &pb.PrivacySettings{
@@ -1030,20 +1030,14 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		}, nil
 	}
 
-	if !isCompleted {
-		return &pb.ConfirmTaskCompletionResponse{
-			Success: false,
-			Error:   "task is not marked as completed yet",
-		}, nil
-	}
-
 	_, err = tx.Exec(ctx, `
         UPDATE tasks 
         SET is_confirmed = $1, 
-            confirmation_user_id = $2, 
+            confirmation_user_id = $2,
+			is_completed = $4, 
             confirmed_at = NOW() 
         WHERE id = $3
-    `, req.IsConfirmed, req.ConfirmerId, req.TaskId)
+    `, req.IsConfirmed, req.ConfirmerId, req.TaskId, req.IsConfirmed)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task confirmation: %v", err)
