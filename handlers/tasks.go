@@ -895,7 +895,7 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 	}
 
 	// Handle event creation based on task status changes
-	if isBeingCompleted {
+	if isBeingCompleted || req.Task.Completion.NeedsConfirmation {
 		if req.Task.Completion.NeedsConfirmation {
 			// Create "requires_confirmation" event
 			eventID := uuid.New().String()
