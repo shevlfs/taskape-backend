@@ -896,7 +896,7 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 			// Create "requires_confirmation" event
 			eventID := uuid.New().String()
 			now := time.Now()
-			expiresAt := now.Add(3 * 24 * time.Hour)
+			expiresAt := now.Add(100 * 24 * time.Hour)
 			sizes := []string{"medium", "large"}
 			eventSize := sizes[rand.Intn(len(sizes))]
 
