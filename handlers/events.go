@@ -26,7 +26,6 @@ const (
 	EventTypeDeadlineComingUp     = "deadline_coming_up"
 )
 
-// CreateEventForTasks creates an event for a user's tasks with the specified type
 func (h *TaskHandler) CreateEventForTasks(ctx context.Context, userID string, targetUserID string, eventType string, taskIDs []string) error {
 	tx, err := h.Pool.Begin(ctx)
 	if err != nil {
@@ -34,11 +33,9 @@ func (h *TaskHandler) CreateEventForTasks(ctx context.Context, userID string, ta
 	}
 	defer tx.Rollback(ctx)
 
-	// Generate a random event size (small, medium, large)
 	sizes := []string{"small", "medium", "large"}
 	eventSize := sizes[rand.Intn(len(sizes))]
 
-	// Set expiration to 24 hours from now
 	expiresAt := time.Now().Add(24 * time.Hour)
 
 	eventID := uuid.New().String()
@@ -76,11 +73,12 @@ func stringArrayToPostgresArray(arr []string) string {
 	return result
 }
 
-func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest) (*pb.GetUserEventsResponse, error) {
-	if req.UserId == "" {
-		return &pb.GetUserEventsResponse{
+// GetUserRelatedEvents retrieves all events related to a specific user
+func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUserRelatedEventsRequest) (*pb.GetUserRelatedEventsResponse, error) {
+	if req.TargetUserId == "" || req.RequesterId == "" {
+		return &pb.GetUserRelatedEventsResponse{
 			Success: false,
-			Error:   "user id is required",
+			Error:   "target user id and requester id are required",
 		}, nil
 	}
 
@@ -89,10 +87,14 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		limit = int(req.Limit)
 	}
 
-	// Convert userID to integer for database queries
-	userIDInt, err := strconv.Atoi(req.UserId)
+	targetUserIDInt, err := strconv.Atoi(req.TargetUserId)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user id format: %v", err)
+		return nil, fmt.Errorf("invalid target user id format: %v", err)
+	}
+
+	requesterIDInt, err := strconv.Atoi(req.RequesterId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid requester id format: %v", err)
 	}
 
 	tx, err := h.Pool.Begin(ctx)
@@ -101,15 +103,140 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 	}
 	defer tx.Rollback(ctx)
 
-	// First get the list of users that the requesting user is allowed to see events from
-	// This includes the user themselves and their friends
-	var allowedUserIDs []int
-	allowedUserIDs = append(allowedUserIDs, userIDInt) // User can always see their own events
+	// Determine if requester is the same as target or is a friend
+	isSelf := req.RequesterId == req.TargetUserId
 
-	// Get friends list if viewing someone else's events
+	var isFriend bool
+	if !isSelf {
+		err = tx.QueryRow(ctx, `
+            SELECT EXISTS(
+                SELECT 1 FROM user_friends 
+                WHERE user_id = $1 AND friend_id = $2
+            )
+        `, requesterIDInt, targetUserIDInt).Scan(&isFriend)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to check friendship: %v", err)
+		}
+
+		if !isFriend {
+			return &pb.GetUserRelatedEventsResponse{
+				Success: true,
+				Events:  []*pb.Event{},
+			}, nil
+		}
+	}
+
+	query := `
+        SELECT 
+            e.id, e.user_id, e.target_user_id, e.event_type, e.event_size, 
+            e.created_at, e.expires_at, e.task_ids, e.streak_days, 
+            e.likes_count, e.comments_count
+        FROM events e
+        WHERE (
+    `
+
+	var queryParams []interface{}
+	queryParams = append(queryParams, req.TargetUserId)
+
+	if isSelf {
+		query += `
+            (e.user_id = $1 OR e.target_user_id = $1)
+        `
+	} else {
+		query += `
+            (e.user_id = $1 AND e.target_user_id = e.user_id) -- Public events
+            OR (e.user_id = $2 AND e.target_user_id = $1) -- Events directed at target from requester
+        `
+		queryParams = append(queryParams, req.RequesterId)
+	}
+
+	query += `)
+        AND (e.expires_at IS NULL OR e.expires_at > $` + strconv.Itoa(len(queryParams)+1) + ` OR $` + strconv.Itoa(len(queryParams)+2) + ` = true)
+    `
+
+	queryParams = append(queryParams, time.Now(), req.IncludeExpired)
+
+	query += `
+        ORDER BY e.created_at DESC
+        LIMIT $` + strconv.Itoa(len(queryParams)+1) + `
+    `
+
+	queryParams = append(queryParams, limit)
+
+	rows, err := tx.Query(ctx, query, queryParams...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events: %v", err)
+	}
+	defer rows.Close()
+
+	var events []*pb.Event
+	var allTaskIDs []string
+
+	for rows.Next() {
+		event, err := scanEventRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning event row: %v", err)
+		}
+
+		events = append(events, event)
+
+		if len(event.TaskIds) > 0 {
+			allTaskIDs = append(allTaskIDs, event.TaskIds...)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating event rows: %v", err)
+	}
+
+	// If we have task-related events, prefetch task privacy information
+	taskPrivacyMap := make(map[string]TaskPrivacyInfo)
+	if len(allTaskIDs) > 0 {
+		// Deduplicate task IDs
+		uniqueTaskIDs := make([]string, 0, len(allTaskIDs))
+		seen := make(map[string]bool)
+		for _, id := range allTaskIDs {
+			if !seen[id] {
+				seen[id] = true
+				uniqueTaskIDs = append(uniqueTaskIDs, id)
+			}
+		}
+
+		taskRows, err := tx.Query(ctx, `
+            SELECT 
+                id, user_id, privacy_level, privacy_except_ids
+            FROM tasks
+            WHERE id = ANY($1)
+        `, uniqueTaskIDs)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to query task privacy: %v", err)
+		}
+		defer taskRows.Close()
+
+		for taskRows.Next() {
+			var (
+				taskID, userID, privacyLevel string
+				exceptIDs                    []string
+			)
+
+			if err := taskRows.Scan(&taskID, &userID, &privacyLevel, &exceptIDs); err != nil {
+				return nil, fmt.Errorf("failed to scan task privacy row: %v", err)
+			}
+
+			taskPrivacyMap[taskID] = TaskPrivacyInfo{
+				UserID:       userID,
+				PrivacyLevel: privacyLevel,
+				ExceptIDs:    exceptIDs,
+			}
+		}
+	}
+
+	var friendIDs []int
 	friendRows, err := tx.Query(ctx, `
-		SELECT friend_id FROM user_friends WHERE user_id = $1
-	`, userIDInt)
+        SELECT friend_id FROM user_friends WHERE user_id = $1
+    `, requesterIDInt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query friends: %v", err)
 	}
@@ -120,129 +247,24 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		if err := friendRows.Scan(&friendID); err != nil {
 			return nil, fmt.Errorf("failed to scan friend row: %v", err)
 		}
-		allowedUserIDs = append(allowedUserIDs, friendID)
+		friendIDs = append(friendIDs, friendID)
 	}
 
-	// Check if we need to create new events for users
-	// We'll only do this for recent friends (last 24 hours)
-	currentTime := time.Now()
-	currentTime.Add(-24 * time.Hour)
-
-	// Build the query to get events with privacy filtering
-	query := `
-		SELECT 
-			e.id, e.user_id, e.target_user_id, e.event_type, e.event_size, 
-			e.created_at, e.expires_at, e.task_ids, e.streak_days, 
-			e.likes_count, e.comments_count
-		FROM events e
-		WHERE (
-			-- User can see their own events
-			(e.user_id = $1 AND e.target_user_id = $1)
-			
-			-- Or events targeted to them from their friends
-			OR (e.target_user_id = $1 AND e.user_id = ANY($2))
-			
-			-- Or events from their friends that are public
-			OR (e.user_id = ANY($2) AND e.target_user_id = e.user_id)
-		)
-		AND (e.expires_at IS NULL OR e.expires_at > $3 OR $4 = true)
-	`
-
-	// If we're limiting to just one event per user, we need a different approach
-	var events []*pb.Event
-
-	if req.Limit == 1 {
-		// For each allowed user, get their most recent event
-		for _, userID := range allowedUserIDs {
-			// Skip getting events if it's not the user we're specifically requesting
-			if req.UserId != strconv.Itoa(userID) && !contains(allowedUserIDs, userID) {
-				continue
-			}
-
-			row := tx.QueryRow(ctx, `
-				SELECT 
-					id, user_id, target_user_id, event_type, event_size, 
-					created_at, expires_at, task_ids, streak_days, 
-					likes_count, comments_count
-				FROM events
-				WHERE user_id = $1
-				AND (expires_at IS NULL OR expires_at > $2 OR $3 = true)
-				ORDER BY created_at DESC
-				LIMIT 1
-			`, userID, currentTime, req.IncludeExpired)
-
-			event, err := scanEvent(row)
-			if err != nil {
-				if err == pgx.ErrNoRows {
-					// No event found for this user, we might need to generate one
-					if userID != userIDInt {
-						newEvent, genErr := h.generateEventForUser(ctx, tx, userID, userIDInt)
-						if genErr == nil && newEvent != nil {
-							events = append(events, newEvent)
-						}
-					}
-					continue
-				}
-				return nil, fmt.Errorf("error scanning event: %v", err)
-			}
-
-			// Check privacy settings for task-related events
-			if canViewEvent(event, userIDInt, allowedUserIDs) {
-				events = append(events, event)
-			}
-		}
-	} else {
-		// Standard query for multiple events
-		rows, err := tx.Query(ctx, query+`
-			ORDER BY created_at DESC
-			LIMIT $5
-		`, userIDInt, allowedUserIDs, currentTime, req.IncludeExpired, limit)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to query events: %v", err)
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			event, err := scanEventRow(rows)
-			if err != nil {
-				return nil, fmt.Errorf("error scanning event row: %v", err)
-			}
-
-			// Check privacy settings for task-related events
-			if canViewEvent(event, userIDInt, allowedUserIDs) {
-				events = append(events, event)
-			}
-		}
-
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("error iterating event rows: %v", err)
-		}
-
-		// If we didn't get any events, try to generate some
-		if len(events) == 0 {
-			for _, friendID := range allowedUserIDs {
-				if friendID == userIDInt {
-					continue // Skip generating events for self
-				}
-				newEvent, err := h.generateEventForUser(ctx, tx, friendID, userIDInt)
-				if err == nil && newEvent != nil {
-					events = append(events, newEvent)
-					if len(events) >= limit {
-						break
-					}
-				}
-			}
+	// Filter events based on task privacy rules
+	var filteredEvents []*pb.Event
+	for _, event := range events {
+		if canViewEvent(event, requesterIDInt, friendIDs, taskPrivacyMap) {
+			filteredEvents = append(filteredEvents, event)
 		}
 	}
 
 	// For each event, get the liked by user IDs
-	for i, event := range events {
+	for i, event := range filteredEvents {
 		likeRows, err := tx.Query(ctx, `
-			SELECT user_id::text 
-			FROM event_likes 
-			WHERE event_id = $1::uuid
-		`, event.Id)
+            SELECT user_id::text 
+            FROM event_likes 
+            WHERE event_id = $1::uuid
+        `, event.Id)
 
 		if err != nil {
 			continue // Skip if we can't get likes
@@ -257,7 +279,184 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		}
 		likeRows.Close()
 
-		events[i].LikedByUserIds = likedByUserIds
+		filteredEvents[i].LikedByUserIds = likedByUserIds
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.GetUserRelatedEventsResponse{
+		Success: true,
+		Events:  filteredEvents,
+	}, nil
+}
+
+// Updated GetUserEvents function with task privacy prefetching
+func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest) (*pb.GetUserEventsResponse, error) {
+	if req.UserId == "" {
+		return &pb.GetUserEventsResponse{
+			Success: false,
+			Error:   "user id is required",
+		}, nil
+	}
+
+	// limit := 50
+	// if req.Limit > 0 {
+	// 	limit = int(req.Limit)
+	// }
+
+	// Convert userID to integer for database queries
+	userIDInt, err := strconv.Atoi(req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id format: %v", err)
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var allowedUserIDs []int
+	allowedUserIDs = append(allowedUserIDs, userIDInt) // User can always see their own events
+
+	friendRows, err := tx.Query(ctx, `
+        SELECT friend_id FROM user_friends WHERE user_id = $1
+    `, userIDInt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query friends: %v", err)
+	}
+	defer friendRows.Close()
+
+	for friendRows.Next() {
+		var friendID int
+		if err := friendRows.Scan(&friendID); err != nil {
+			return nil, fmt.Errorf("failed to scan friend row: %v", err)
+		}
+		allowedUserIDs = append(allowedUserIDs, friendID)
+	}
+
+	// Build the query to get all events
+	query := `
+        SELECT 
+            e.id, e.user_id, e.target_user_id, e.event_type, e.event_size, 
+            e.created_at, e.expires_at, e.task_ids, e.streak_days, 
+            e.likes_count, e.comments_count
+        FROM events e
+        WHERE (
+            -- User can see their own events
+            (e.user_id = $1 AND e.target_user_id = $1)
+            
+            -- Or events targeted to them from their friends
+            OR (e.target_user_id = $1 AND e.user_id = ANY($2))
+            
+            -- Or events from their friends that are public
+            OR (e.user_id = ANY($2) AND e.target_user_id = e.user_id)
+        )
+        AND (e.expires_at IS NULL OR e.expires_at > $3 OR $4 = true)
+    `
+
+	currentTime := time.Now()
+	rows, err := tx.Query(ctx, query, userIDInt, allowedUserIDs, currentTime, req.IncludeExpired)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query events: %v", err)
+	}
+	defer rows.Close()
+
+	var events []*pb.Event
+	var allTaskIDs []string
+
+	for rows.Next() {
+		event, err := scanEventRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning event row: %v", err)
+		}
+
+		events = append(events, event)
+
+		if len(event.TaskIds) > 0 {
+			allTaskIDs = append(allTaskIDs, event.TaskIds...)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating event rows: %v", err)
+	}
+
+	// If we have task-related events, prefetch task privacy information
+	taskPrivacyMap := make(map[string]TaskPrivacyInfo)
+	if len(allTaskIDs) > 0 {
+		// Deduplicate task IDs
+		uniqueTaskIDs := make([]string, 0, len(allTaskIDs))
+		seen := make(map[string]bool)
+		for _, id := range allTaskIDs {
+			if !seen[id] {
+				seen[id] = true
+				uniqueTaskIDs = append(uniqueTaskIDs, id)
+			}
+		}
+
+		// Query privacy information for all referenced tasks
+		taskRows, err := tx.Query(ctx, `
+            SELECT 
+                id, user_id, privacy_level, privacy_except_ids
+            FROM tasks
+            WHERE id = ANY($1)
+        `, uniqueTaskIDs)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to query task privacy: %v", err)
+		}
+		defer taskRows.Close()
+
+		for taskRows.Next() {
+			var (
+				taskID, userID, privacyLevel string
+				exceptIDs                    []string
+			)
+
+			if err := taskRows.Scan(&taskID, &userID, &privacyLevel, &exceptIDs); err != nil {
+				return nil, fmt.Errorf("failed to scan task privacy row: %v", err)
+			}
+
+			taskPrivacyMap[taskID] = TaskPrivacyInfo{
+				UserID:       userID,
+				PrivacyLevel: privacyLevel,
+				ExceptIDs:    exceptIDs,
+			}
+		}
+	}
+
+	var filteredEvents []*pb.Event
+	for _, event := range events {
+		if canViewEvent(event, userIDInt, allowedUserIDs, taskPrivacyMap) {
+			filteredEvents = append(filteredEvents, event)
+		}
+	}
+
+	for i, event := range filteredEvents {
+		likeRows, err := tx.Query(ctx, `
+            SELECT user_id::text 
+            FROM event_likes 
+            WHERE event_id = $1::uuid
+        `, event.Id)
+
+		if err != nil {
+			continue // Skip if we can't get likes
+		}
+
+		var likedByUserIds []string
+		for likeRows.Next() {
+			var userID string
+			if err := likeRows.Scan(&userID); err == nil {
+				likedByUserIds = append(likedByUserIds, userID)
+			}
+		}
+		likeRows.Close()
+
+		filteredEvents[i].LikedByUserIds = likedByUserIds
 	}
 
 	err = tx.Commit(ctx)
@@ -267,11 +466,78 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 
 	return &pb.GetUserEventsResponse{
 		Success: true,
-		Events:  events,
+		Events:  filteredEvents,
 	}, nil
 }
 
-// Helper function to scan an event from a pgx.Row
+type TaskPrivacyInfo struct {
+	UserID       string
+	PrivacyLevel string
+	ExceptIDs    []string
+}
+
+func canViewEvent(event *pb.Event, viewerID int, friendIDs []int, taskPrivacyMap map[string]TaskPrivacyInfo) bool {
+	viewerIDStr := strconv.Itoa(viewerID)
+	if event.UserId == viewerIDStr || event.TargetUserId == viewerIDStr {
+		return true
+	}
+
+	eventUserID, _ := strconv.Atoi(event.UserId)
+	isFriend := contains(friendIDs, eventUserID)
+	if !isFriend {
+		return false
+	}
+
+	// For task-related events, check task privacy settings
+	if event.Type == pb.EventType_NEW_TASKS_ADDED ||
+		event.Type == pb.EventType_NEWLY_RECEIVED ||
+		event.Type == pb.EventType_NEWLY_COMPLETED ||
+		event.Type == pb.EventType_REQUIRES_CONFIRMATION {
+
+		if len(event.TaskIds) == 0 {
+			return true
+		}
+
+		for _, taskID := range event.TaskIds {
+			privacy, exists := taskPrivacyMap[taskID]
+			if !exists {
+				continue
+			}
+
+			switch privacy.PrivacyLevel {
+			case "everyone":
+				return true
+
+			case "friends-only":
+				return true
+
+			case "except":
+				if !containsString(privacy.ExceptIDs, viewerIDStr) {
+					return true
+				}
+
+			case "noone":
+				if privacy.UserID == viewerIDStr {
+					return true
+				}
+			}
+		}
+
+		return false
+	}
+
+	return true
+}
+
+func containsString(slice []string, val string) bool {
+	for _, item := range slice {
+		if item == val {
+			return true
+		}
+	}
+	return false
+}
+
 func scanEvent(row pgx.Row) (*pb.Event, error) {
 	var (
 		id            string
@@ -296,7 +562,6 @@ func scanEvent(row pgx.Row) (*pb.Event, error) {
 		return nil, err
 	}
 
-	// Convert string event type to enum
 	eventType := pb.EventType_NEW_TASKS_ADDED
 	switch eventTypeStr {
 	case "new_tasks_added":
@@ -313,7 +578,6 @@ func scanEvent(row pgx.Row) (*pb.Event, error) {
 		eventType = pb.EventType_DEADLINE_COMING_UP
 	}
 
-	// Convert string event size to enum
 	eventSize := pb.EventSize_MEDIUM
 	switch eventSizeStr {
 	case "small":
@@ -370,7 +634,6 @@ func scanEventRow(rows pgx.Rows) (*pb.Event, error) {
 		return nil, err
 	}
 
-	// Convert string event type to enum
 	eventType := pb.EventType_NEW_TASKS_ADDED
 	switch eventTypeStr {
 	case "new_tasks_added":
@@ -387,7 +650,6 @@ func scanEventRow(rows pgx.Rows) (*pb.Event, error) {
 		eventType = pb.EventType_DEADLINE_COMING_UP
 	}
 
-	// Convert string event size to enum
 	eventSize := pb.EventSize_MEDIUM
 	switch eventSizeStr {
 	case "small":
@@ -419,37 +681,6 @@ func scanEventRow(rows pgx.Rows) (*pb.Event, error) {
 	return event, nil
 }
 
-// Helper function to check if an event should be visible based on privacy settings
-func canViewEvent(event *pb.Event, viewerID int, friendIDs []int) bool {
-	// If it's the user's own event or it's targeted to them, they can see it
-	viewerIDStr := strconv.Itoa(viewerID)
-	if event.UserId == viewerIDStr || event.TargetUserId == viewerIDStr {
-		return true
-	}
-
-	// Check if the viewer is a friend of the event owner
-	eventUserID, _ := strconv.Atoi(event.UserId)
-	isFriend := contains(friendIDs, eventUserID)
-	if !isFriend {
-		return false
-	}
-
-	// For task-related events, check task privacy settings
-	if event.Type == pb.EventType_NEW_TASKS_ADDED ||
-		event.Type == pb.EventType_NEWLY_RECEIVED ||
-		event.Type == pb.EventType_NEWLY_COMPLETED ||
-		event.Type == pb.EventType_REQUIRES_CONFIRMATION {
-		// TODO: Implement task privacy checking by querying the tasks
-		// This would require additional database queries to check each task's privacy
-		// For now, we'll allow friends to see all task-related events
-		return true
-	}
-
-	// Streak events and deadline events are visible to friends
-	return true
-}
-
-// Helper function to generate an event for a user
 func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, userID int, _ int) (*pb.Event, error) {
 	// Check if the user already has a recent event (last 24 hours)
 	var recentEventExists bool
@@ -499,13 +730,11 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 		return nil, fmt.Errorf("failed to calculate streak: %v", err)
 	}
 
-	// If the user has a streak, create a streak event
 	if streakDays > 0 {
 		now := time.Now()
 		expiresAt := now.Add(24 * time.Hour)
 		eventID := uuid.New().String()
 
-		// Insert the event
 		_, err = tx.Exec(ctx, `
 			INSERT INTO events (
 				id, user_id, target_user_id, event_type, event_size, 
@@ -519,7 +748,6 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 			return nil, fmt.Errorf("failed to insert streak event: %v", err)
 		}
 
-		// Create and return the event object
 		return &pb.Event{
 			Id:            eventID,
 			UserId:        strconv.Itoa(userID),
@@ -535,7 +763,6 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 		}, nil
 	}
 
-	// Otherwise, check for recent task activity
 	var taskID string
 	var taskName string
 	err = tx.QueryRow(ctx, `
@@ -552,7 +779,6 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 	}
 
 	if err == nil {
-		// Create a new task added event
 		now := time.Now()
 		expiresAt := now.Add(24 * time.Hour)
 		eventID := uuid.New().String()
@@ -585,11 +811,9 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 		}, nil
 	}
 
-	// No suitable event could be generated
 	return nil, nil
 }
 
-// Helper function to check if a slice contains a value
 func contains(slice []int, val int) bool {
 	for _, item := range slice {
 		if item == val {
@@ -599,7 +823,6 @@ func contains(slice []int, val int) bool {
 	return false
 }
 
-// LikeEvent adds a like to an event
 func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) (*pb.LikeEventResponse, error) {
 	if req.EventId == "" || req.UserId == "" {
 		return &pb.LikeEventResponse{
@@ -648,7 +871,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 	}
 
 	if alreadyLiked {
-		// User has already liked this event
 		var likesCount int32
 		err = tx.QueryRow(ctx, `
 			SELECT likes_count FROM events WHERE id = $1::uuid
@@ -664,7 +886,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 		}, nil
 	}
 
-	// Add the like
 	_, err = tx.Exec(ctx, `
 		INSERT INTO event_likes (event_id, user_id)
 		VALUES ($1::uuid, $2)
@@ -674,7 +895,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 		return nil, fmt.Errorf("failed to like event: %v", err)
 	}
 
-	// Get updated likes count
 	var likesCount int32
 	err = tx.QueryRow(ctx, `
 		SELECT likes_count FROM events WHERE id = $1::uuid
@@ -694,7 +914,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 	}, nil
 }
 
-// UnlikeEvent removes a like from an event
 func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventRequest) (*pb.UnlikeEventResponse, error) {
 	if req.EventId == "" || req.UserId == "" {
 		return &pb.UnlikeEventResponse{
@@ -703,7 +922,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 		}, nil
 	}
 
-	// Convert user ID to integer
 	userIDInt, err := strconv.Atoi(req.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID format: %v", err)
@@ -726,7 +944,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 	}
 
 	if !exists {
-		// User hasn't liked this event
 		var likesCount int32
 		err = tx.QueryRow(ctx, `
 			SELECT likes_count FROM events WHERE id = $1::uuid
@@ -742,7 +959,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 		}, nil
 	}
 
-	// Remove the like
 	_, err = tx.Exec(ctx, `
 		DELETE FROM event_likes 
 		WHERE event_id = $1::uuid AND user_id = $2
@@ -752,7 +968,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 		return nil, fmt.Errorf("failed to unlike event: %v", err)
 	}
 
-	// Get updated likes count
 	var likesCount int32
 	err = tx.QueryRow(ctx, `
 		SELECT likes_count FROM events WHERE id = $1::uuid
@@ -772,7 +987,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 	}, nil
 }
 
-// AddEventComment adds a comment to an event
 func (h *EventHandler) AddEventComment(ctx context.Context, req *pb.AddEventCommentRequest) (*pb.AddEventCommentResponse, error) {
 	if req.EventId == "" || req.UserId == "" || req.Content == "" {
 		return &pb.AddEventCommentResponse{
@@ -780,8 +994,6 @@ func (h *EventHandler) AddEventComment(ctx context.Context, req *pb.AddEventComm
 			Error:   "Event ID, User ID, and Content are required",
 		}, nil
 	}
-
-	// Trim and check if content is empty after trimming
 	content := strings.TrimSpace(req.Content)
 	if content == "" {
 		return &pb.AddEventCommentResponse{
@@ -813,7 +1025,6 @@ func (h *EventHandler) AddEventComment(ctx context.Context, req *pb.AddEventComm
 		}, nil
 	}
 
-	// Add the comment
 	commentID := uuid.New().String()
 	now := time.Now()
 
@@ -826,12 +1037,10 @@ func (h *EventHandler) AddEventComment(ctx context.Context, req *pb.AddEventComm
 		return nil, fmt.Errorf("failed to add comment: %v", err)
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
-	// Create response
 	comment := &pb.EventComment{
 		Id:        commentID,
 		EventId:   req.EventId,
@@ -847,7 +1056,6 @@ func (h *EventHandler) AddEventComment(ctx context.Context, req *pb.AddEventComm
 	}, nil
 }
 
-// GetEventComments retrieves comments for an event
 func (h *EventHandler) GetEventComments(ctx context.Context, req *pb.GetEventCommentsRequest) (*pb.GetEventCommentsResponse, error) {
 	if req.EventId == "" {
 		return &pb.GetEventCommentsResponse{
@@ -856,7 +1064,6 @@ func (h *EventHandler) GetEventComments(ctx context.Context, req *pb.GetEventCom
 		}, nil
 	}
 
-	// Check if event exists
 	var exists bool
 	err := h.Pool.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM events WHERE id = $1)
@@ -873,19 +1080,16 @@ func (h *EventHandler) GetEventComments(ctx context.Context, req *pb.GetEventCom
 		}, nil
 	}
 
-	// Set default limit if not provided
 	limit := 20
 	if req.Limit > 0 {
 		limit = int(req.Limit)
 	}
 
-	// Set default offset if not provided
 	offset := 0
 	if req.Offset > 0 {
 		offset = int(req.Offset)
 	}
 
-	// Get total count of non-deleted comments
 	var totalCount int32
 	err = h.Pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM event_comments 
@@ -992,7 +1196,6 @@ func (h *EventHandler) DeleteEventComment(ctx context.Context, req *pb.DeleteEve
 		}, nil
 	}
 
-	// Verify the user is the comment author (or implement admin check here if needed)
 	if commentUserId != req.UserId {
 		return &pb.DeleteEventCommentResponse{
 			Success: false,
@@ -1000,7 +1203,6 @@ func (h *EventHandler) DeleteEventComment(ctx context.Context, req *pb.DeleteEve
 		}, status.Error(codes.PermissionDenied, "You can only delete your own comments")
 	}
 
-	// Soft delete the comment (mark as deleted)
 	_, err = tx.Exec(ctx, `
 		UPDATE event_comments 
 		SET deleted = TRUE

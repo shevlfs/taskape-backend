@@ -6,93 +6,207 @@ import "google/protobuf/timestamp.proto";
 option go_package = "./taskape-proto/";
 
 service BackendRequests {
-    rpc loginNewUser(NewUserLoginRequest) returns (NewUserLoginResponse) {}
-    rpc validateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {}
-    rpc refreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {}
-    rpc verifyUserToken(VerifyUserRequest) returns (VerifyUserResponse) {}
-    rpc registerNewProfile(RegisterNewProfileRequest) returns (RegisterNewProfileResponse) {}
-    rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {}
-    rpc CreateTasksBatch(CreateTasksBatchRequest) returns (CreateTasksBatchResponse) {}
-    rpc GetUserTasks(GetUserTasksRequest) returns (GetUserTasksResponse) {}
-    rpc CheckHandleAvailability(CheckHandleRequest) returns (CheckHandleResponse) {}
-    rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
-    rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {}
-    rpc UpdateTaskOrder(UpdateTaskOrderRequest) returns (UpdateTaskOrderResponse) {}
-    rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse) {}
-    rpc SendFriendRequest(SendFriendRequestRequest) returns (SendFriendRequestResponse) {}
-    rpc RespondToFriendRequest(RespondToFriendRequestRequest) returns (RespondToFriendRequestResponse) {}
-    rpc GetUserFriends(GetUserFriendsRequest) returns (GetUserFriendsResponse) {}
-    rpc GetFriendRequests(GetFriendRequestsRequest) returns (GetFriendRequestsResponse) {}
+  rpc loginNewUser(NewUserLoginRequest) returns (NewUserLoginResponse) {}
+  rpc validateToken(ValidateTokenRequest) returns (ValidateTokenResponse) {}
+  rpc refreshToken(RefreshTokenRequest) returns (RefreshTokenResponse) {}
+  rpc verifyUserToken(VerifyUserRequest) returns (VerifyUserResponse) {}
+  rpc registerNewProfile(RegisterNewProfileRequest)
+      returns (RegisterNewProfileResponse) {}
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {}
+  rpc CreateTasksBatch(CreateTasksBatchRequest)
+      returns (CreateTasksBatchResponse) {}
+  rpc GetUserTasks(GetUserTasksRequest) returns (GetUserTasksResponse) {}
+  rpc CheckHandleAvailability(CheckHandleRequest)
+      returns (CheckHandleResponse) {}
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {}
+  rpc UpdateTaskOrder(UpdateTaskOrderRequest)
+      returns (UpdateTaskOrderResponse) {}
+  rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse) {}
+  rpc SendFriendRequest(SendFriendRequestRequest)
+      returns (SendFriendRequestResponse) {}
+  rpc RespondToFriendRequest(RespondToFriendRequestRequest)
+      returns (RespondToFriendRequestResponse) {}
+  rpc GetUserFriends(GetUserFriendsRequest) returns (GetUserFriendsResponse) {}
+  rpc GetFriendRequests(GetFriendRequestsRequest)
+      returns (GetFriendRequestsResponse) {}
 
-    rpc GetUserEvents(GetUserEventsRequest) returns (GetUserEventsResponse) {}
-    rpc ConfirmTaskCompletion(ConfirmTaskCompletionRequest) returns (ConfirmTaskCompletionResponse) {}
-    
-    rpc LikeEvent(LikeEventRequest) returns (LikeEventResponse) {}
-    rpc UnlikeEvent(UnlikeEventRequest) returns (UnlikeEventResponse) {}
-    rpc AddEventComment(AddEventCommentRequest) returns (AddEventCommentResponse) {}
-    rpc GetEventComments(GetEventCommentsRequest) returns (GetEventCommentsResponse) {}
-    rpc DeleteEventComment(DeleteEventCommentRequest) returns (DeleteEventCommentResponse) {}
+  rpc GetUserEvents(GetUserEventsRequest) returns (GetUserEventsResponse) {}
+  rpc ConfirmTaskCompletion(ConfirmTaskCompletionRequest)
+      returns (ConfirmTaskCompletionResponse) {}
 
+  rpc LikeEvent(LikeEventRequest) returns (LikeEventResponse) {}
+  rpc UnlikeEvent(UnlikeEventRequest) returns (UnlikeEventResponse) {}
+  rpc AddEventComment(AddEventCommentRequest)
+      returns (AddEventCommentResponse) {}
+  rpc GetEventComments(GetEventCommentsRequest)
+      returns (GetEventCommentsResponse) {}
+  rpc DeleteEventComment(DeleteEventCommentRequest)
+      returns (DeleteEventCommentResponse) {}
+
+  rpc GetUsersBatch(GetUsersBatchRequest) returns (GetUsersBatchResponse) {}
+  rpc GetUsersTasksBatch(GetUsersTasksBatchRequest)
+      returns (GetUsersTasksBatchResponse) {}
+  rpc EditUserProfile(EditUserProfileRequest)
+      returns (EditUserProfileResponse) {}
+  rpc CreateGroup(CreateGroupRequest) returns (CreateGroupResponse) {}
+  rpc GetGroupTasks(GetGroupTasksRequest) returns (GetGroupTasksResponse) {}
+  rpc InviteToGroup(InviteToGroupRequest) returns (InviteToGroupResponse) {}
+  rpc AcceptGroupInvite(AcceptGroupInviteRequest)
+      returns (AcceptGroupInviteResponse) {}
+  rpc KickUserFromGroup(KickUserFromGroupRequest)
+      returns (KickUserFromGroupResponse) {}
+
+  rpc GetUserRelatedEvents(GetUserRelatedEventsRequest)
+      returns (GetUserRelatedEventsResponse) {}
 }
 
-message ValidateTokenRequest {
-    string token = 1;
+message GetUsersBatchRequest { repeated string user_ids = 1; }
+
+message GetUsersBatchResponse {
+  bool success = 1;
+  repeated UserResponse users = 2;
+  string error = 3;
 }
 
-message CheckHandleRequest {
-    string handle = 1;
+message UserResponse {
+  string id = 1;
+  string handle = 2;
+  string bio = 3;
+  string profile_picture = 4;
+  string color = 5;
 }
 
-message CheckHandleResponse {
-    bool available = 1;
+message GetUsersTasksBatchRequest {
+  repeated string user_ids = 1;
+  string requester_id = 2;
 }
 
-message ValidateTokenResponse {
-    bool valid = 1;
+message GetUsersTasksBatchResponse {
+  bool success = 1;
+  map<string, UserTasksData> user_tasks = 2;
+  string error = 3;
 }
+
+message UserTasksData { repeated Task tasks = 1; }
+
+message EditUserProfileRequest {
+  string user_id = 1;
+  string handle = 2;
+  string bio = 3;
+  string color = 4;
+  string profile_picture = 5;
+}
+
+message EditUserProfileResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message CreateGroupRequest {
+  string creator_id = 1;
+  string group_name = 2;
+  string description = 3;
+  string color = 4;
+}
+
+message CreateGroupResponse {
+  bool success = 1;
+  string group_id = 2;
+  string error = 3;
+}
+
+message GetGroupTasksRequest {
+  string group_id = 1;
+  string requester_id = 2;
+}
+
+message GetGroupTasksResponse {
+  bool success = 1;
+  repeated Task tasks = 2;
+  string error = 3;
+}
+
+message InviteToGroupRequest {
+  string group_id = 1;
+  string inviter_id = 2;
+  string invitee_id = 3;
+}
+
+message InviteToGroupResponse {
+  bool success = 1;
+  string invite_id = 2;
+  string error = 3;
+}
+
+message AcceptGroupInviteRequest {
+  string invite_id = 1;
+  string user_id = 2;
+  bool accept = 3;
+}
+
+message AcceptGroupInviteResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message KickUserFromGroupRequest {
+  string group_id = 1;
+  string admin_id = 2;
+  string user_id = 3;
+}
+
+message KickUserFromGroupResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message ValidateTokenRequest { string token = 1; }
+
+message CheckHandleRequest { string handle = 1; }
+
+message CheckHandleResponse { bool available = 1; }
+
+message ValidateTokenResponse { bool valid = 1; }
 
 message RefreshTokenRequest {
-    string token = 1;
-    string refresh_token = 2;
-    string phone = 3;
+  string token = 1;
+  string refresh_token = 2;
+  string phone = 3;
 }
 
 message RefreshTokenResponse {
-    string token = 1;
-    string refresh_token = 2;
+  string token = 1;
+  string refresh_token = 2;
 }
 
-message NewUserLoginRequest {
-    string phone = 1;
-}
+message NewUserLoginRequest { string phone = 1; }
 
 message NewUserLoginResponse {
-    string token = 1;
-    string refresh_token = 2;
-    bool profile_exists = 3;
-    int64 user_id = 4;
+  string token = 1;
+  string refresh_token = 2;
+  bool profile_exists = 3;
+  int64 user_id = 4;
 }
 
 message VerifyUserRequest {
-    string token =1;
-    string phone = 2;
+  string token = 1;
+  string phone = 2;
 }
 
-message VerifyUserResponse {
-    bool success =1;
-}
+message VerifyUserResponse { bool success = 1; }
 
 message RegisterNewProfileRequest {
-    string handle=1;
-    string bio=2;
-    string color=3;
-    string profile_picture=4;
-    string phone=5;
+  string handle = 1;
+  string bio = 2;
+  string color = 3;
+  string profile_picture = 4;
+  string phone = 5;
 }
 
 message RegisterNewProfileResponse {
-    bool success=1;
-    int64 id=2;
+  bool success = 1;
+  int64 id = 2;
 }
 
 message UpdateTaskOrderRequest {
@@ -134,9 +248,7 @@ message Task {
   string proof_description = 21;
 }
 
-message UpdateTaskRequest {
-  Task task = 1;
-}
+message UpdateTaskRequest { Task task = 1; }
 
 message UpdateTaskResponse {
   bool success = 1;
@@ -148,9 +260,7 @@ message PrivacySettings {
   repeated string except_ids = 2;
 }
 
-message CreateTaskRequest {
-  Task task = 1;
-}
+message CreateTaskRequest { Task task = 1; }
 
 message CreateTaskResponse {
   bool success = 1;
@@ -158,9 +268,7 @@ message CreateTaskResponse {
   string error = 3;
 }
 
-message CreateTasksBatchRequest {
-  repeated Task tasks = 1;
-}
+message CreateTasksBatchRequest { repeated Task tasks = 1; }
 
 message CreateTasksBatchResponse {
   bool success = 1;
@@ -179,92 +287,61 @@ message GetUserTasksResponse {
   string error = 3;
 }
 
-message GetUserRequest {
-  string user_id = 1;
-}
+message GetUserRequest { string user_id = 1; }
 
 message Friend {
-    string id = 1;
-    string handle = 2;
-    string profile_picture = 3;
-    string color = 4;
+  string id = 1;
+  string handle = 2;
+  string profile_picture = 3;
+  string color = 4;
 }
 
 message FriendRequest {
-    string id = 1;
-    string sender_id = 2;
-    string sender_handle = 3;
-    string receiver_id = 4;
-    string status = 5;
-    google.protobuf.Timestamp created_at = 6;
+  string id = 1;
+  string sender_id = 2;
+  string sender_handle = 3;
+  string receiver_id = 4;
+  string status = 5;
+  google.protobuf.Timestamp created_at = 6;
 }
 
 message SearchUsersRequest {
-    string query = 1;
-    int32 limit = 2;
+  string query = 1;
+  int32 limit = 2;
 }
 
-message SearchUsersResponse {
-    repeated UserSearchResult users = 1;
-}
+message SearchUsersResponse { repeated UserSearchResult users = 1; }
 
 message UserSearchResult {
-    string id = 1;
-    string handle = 2;
-    string profile_picture = 3;
-    string color = 4;
+  string id = 1;
+  string handle = 2;
+  string profile_picture = 3;
+  string color = 4;
 }
 
-message SendFriendRequestRequest {
-    string sender_id = 1;
-    string receiver_id = 2;
+message GetUserRelatedEventsRequest {
+  string target_user_id = 1;
+  string requester_id = 2;
+  int32 limit = 3;
+  bool include_expired = 4;
 }
 
-message SendFriendRequestResponse {
-    bool success = 1;
-    string request_id = 2;
-    string error = 3;
+message GetUserRelatedEventsResponse {
+  bool success = 1;
+  repeated Event events = 2;
+  string error = 3;
 }
 
-message RespondToFriendRequestRequest {
-    string request_id = 1;
-    string user_id = 2;
-    string response = 3;
+// Add new message types
+message GetUserEventRequest {
+  string event_id = 1;
+  string user_id = 2; // The user requesting access
 }
 
-message RespondToFriendRequestResponse {
-    bool success = 1;
-    string error = 2;
-}
-
-message GetUserFriendsRequest {
-    string user_id = 1;
-}
-
-message GetUserFriendsResponse {
-    repeated Friend friends = 1;
-}
-
-message GetFriendRequestsRequest {
-    string user_id = 1;
-    string type = 2;
-}
-
-message GetFriendRequestsResponse {
-    repeated FriendRequest requests = 1;
-}
-
-message GetUserResponse {
-    bool success = 1;
-    string id = 2;
-    string handle = 3;
-    string bio = 4;
-    string profile_picture = 5;
-    string color = 6;
-    repeated Friend friends = 7;
-    repeated FriendRequest incoming_requests = 8;
-    repeated FriendRequest outgoing_requests = 9;
-    string error = 10;
+message GetUserEventResponse {
+  bool success = 1;
+  Event event = 2;
+  string error = 3;
 }
 
 message CompletionStatus {
@@ -272,8 +349,55 @@ message CompletionStatus {
   string proof_url = 2;
   bool needs_confirmation = 3;
   bool is_confirmed = 4;
-  string confirmation_user_id = 5;
-  google.protobuf.Timestamp confirmed_at = 6;
+  bool is_rejected = 5;
+  string confirmation_user_id = 6;
+  google.protobuf.Timestamp confirmed_at = 7;
+}
+
+message SendFriendRequestRequest {
+  string sender_id = 1;
+  string receiver_id = 2;
+}
+
+message SendFriendRequestResponse {
+  bool success = 1;
+  string request_id = 2;
+  string error = 3;
+}
+
+message RespondToFriendRequestRequest {
+  string request_id = 1;
+  string user_id = 2;
+  string response = 3;
+}
+
+message RespondToFriendRequestResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message GetUserFriendsRequest { string user_id = 1; }
+
+message GetUserFriendsResponse { repeated Friend friends = 1; }
+
+message GetFriendRequestsRequest {
+  string user_id = 1;
+  string type = 2;
+}
+
+message GetFriendRequestsResponse { repeated FriendRequest requests = 1; }
+
+message GetUserResponse {
+  bool success = 1;
+  string id = 2;
+  string handle = 3;
+  string bio = 4;
+  string profile_picture = 5;
+  string color = 6;
+  repeated Friend friends = 7;
+  repeated FriendRequest incoming_requests = 8;
+  repeated FriendRequest outgoing_requests = 9;
+  string error = 10;
 }
 
 enum EventType {

@@ -104,6 +104,10 @@ func (s *Server) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest
 	return s.eventHandler.GetUserEvents(ctx, req)
 }
 
+func (s *Server) GetUserRelatedEvents(ctx context.Context, req *pb.GetUserRelatedEventsRequest) (*pb.GetUserRelatedEventsResponse, error) {
+	return s.eventHandler.GetUserRelatedEvents(ctx, req)
+}
+
 func (s *Server) ConfirmTaskCompletion(ctx context.Context, req *pb.ConfirmTaskCompletionRequest) (*pb.ConfirmTaskCompletionResponse, error) {
 	return s.taskHandler.ConfirmTaskCompletion(ctx, req)
 }
@@ -126,6 +130,38 @@ func (s *Server) GetEventComments(ctx context.Context, req *pb.GetEventCommentsR
 
 func (s *Server) DeleteEventComment(ctx context.Context, req *pb.DeleteEventCommentRequest) (*pb.DeleteEventCommentResponse, error) {
 	return s.eventHandler.DeleteEventComment(ctx, req)
+}
+
+func (s *Server) GetUsersBatch(ctx context.Context, req *pb.GetUsersBatchRequest) (*pb.GetUsersBatchResponse, error) {
+	return s.userHandler.GetUsersBatch(ctx, req)
+}
+
+func (s *Server) GetUsersTasksBatch(ctx context.Context, req *pb.GetUsersTasksBatchRequest) (*pb.GetUsersTasksBatchResponse, error) {
+	return s.taskHandler.GetUsersTasksBatch(ctx, req)
+}
+
+func (s *Server) EditUserProfile(ctx context.Context, req *pb.EditUserProfileRequest) (*pb.EditUserProfileResponse, error) {
+	return s.userHandler.EditUserProfile(ctx, req)
+}
+
+func (s *Server) CreateGroup(ctx context.Context, req *pb.CreateGroupRequest) (*pb.CreateGroupResponse, error) {
+	return s.userHandler.CreateGroup(ctx, req)
+}
+
+func (s *Server) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRequest) (*pb.GetGroupTasksResponse, error) {
+	return s.userHandler.GetGroupTasks(ctx, req)
+}
+
+func (s *Server) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRequest) (*pb.InviteToGroupResponse, error) {
+	return s.userHandler.InviteToGroup(ctx, req)
+}
+
+func (s *Server) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroupInviteRequest) (*pb.AcceptGroupInviteResponse, error) {
+	return s.userHandler.AcceptGroupInvite(ctx, req)
+}
+
+func (s *Server) KickUserFromGroup(ctx context.Context, req *pb.KickUserFromGroupRequest) (*pb.KickUserFromGroupResponse, error) {
+	return s.userHandler.KickUserFromGroup(ctx, req)
 }
 
 func (s *Server) Start(port string) error {

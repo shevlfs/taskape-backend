@@ -3,11 +3,14 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	pb "taskape-backend/proto"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -218,5 +221,748 @@ func (h *UserHandler) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 		Friends:          friends,
 		IncomingRequests: incomingRequests,
 		OutgoingRequests: outgoingRequests,
+	}, nil
+}
+
+// Add this to handlers/users.go
+
+func (h *UserHandler) GetUsersBatch(ctx context.Context, req *pb.GetUsersBatchRequest) (*pb.GetUsersBatchResponse, error) {
+	if len(req.UserIds) == 0 {
+		return &pb.GetUsersBatchResponse{
+			Success: false,
+			Error:   "No user IDs provided",
+		}, nil
+	}
+
+	// Limit the maximum number of users to fetch in a single request
+	maxUsers := 50
+	if len(req.UserIds) > maxUsers {
+		req.UserIds = req.UserIds[:maxUsers]
+	}
+
+	// Create a parameterized query to fetch multiple users by ID
+	query := `
+		SELECT id, handle, bio, profile_picture, color
+		FROM users
+		WHERE id = ANY($1)
+	`
+
+	// Convert string IDs to int64 for PostgreSQL
+	userIDInts := make([]int64, 0, len(req.UserIds))
+	for _, id := range req.UserIds {
+		userID, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			continue // Skip invalid IDs
+		}
+		userIDInts = append(userIDInts, userID)
+	}
+
+	// Execute the query
+	rows, err := h.Pool.Query(ctx, query, userIDInts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users: %v", err)
+	}
+	defer rows.Close()
+
+	// Process the results
+	var users []*pb.UserResponse
+	for rows.Next() {
+		var id int64
+		var handle, bio, profilePicture, color string
+
+		err := rows.Scan(&id, &handle, &bio, &profilePicture, &color)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user row: %v", err)
+		}
+
+		users = append(users, &pb.UserResponse{
+			Id:             fmt.Sprintf("%d", id),
+			Handle:         handle,
+			Bio:            bio,
+			ProfilePicture: profilePicture,
+			Color:          color,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user rows: %v", err)
+	}
+
+	return &pb.GetUsersBatchResponse{
+		Success: true,
+		Users:   users,
+	}, nil
+}
+
+// Add this to handlers/users.go
+
+func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfileRequest) (*pb.EditUserProfileResponse, error) {
+	if req.UserId == "" {
+		return &pb.EditUserProfileResponse{
+			Success: false,
+			Error:   "User ID is required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Check if user exists
+	var exists bool
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.UserId).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user exists: %v", err)
+	}
+
+	if !exists {
+		return &pb.EditUserProfileResponse{
+			Success: false,
+			Error:   "User not found",
+		}, nil
+	}
+
+	// Check if handle is changing and if so, check availability
+	if req.Handle != "" {
+		var currentHandle string
+		err = tx.QueryRow(ctx, "SELECT handle FROM users WHERE id = $1", req.UserId).Scan(&currentHandle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current handle: %v", err)
+		}
+
+		if currentHandle != req.Handle {
+			// Check if the new handle is available
+			var handleExists bool
+			err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE handle = $1 AND id != $2)", req.Handle, req.UserId).Scan(&handleExists)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check handle availability: %v", err)
+			}
+
+			if handleExists {
+				return &pb.EditUserProfileResponse{
+					Success: false,
+					Error:   "Handle is already taken",
+				}, nil
+			}
+		}
+	}
+
+	// Build the update query dynamically based on provided fields
+	updateFields := []string{}
+	args := []interface{}{req.UserId} // First arg is always the user ID
+	argCount := 2                     // Start from 2 since the first parameter ($1) is the user ID in the WHERE clause
+
+	if req.Handle != "" {
+		updateFields = append(updateFields, fmt.Sprintf("handle = $%d", argCount))
+		args = append(args, req.Handle)
+		argCount++
+	}
+
+	if req.Bio != "" {
+		updateFields = append(updateFields, fmt.Sprintf("bio = $%d", argCount))
+		args = append(args, req.Bio)
+		argCount++
+	}
+
+	if req.Color != "" {
+		updateFields = append(updateFields, fmt.Sprintf("color = $%d", argCount))
+		args = append(args, req.Color)
+		argCount++
+	}
+
+	if req.ProfilePicture != "" {
+		updateFields = append(updateFields, fmt.Sprintf("profile_picture = $%d", argCount))
+		args = append(args, req.ProfilePicture)
+		argCount++
+	}
+
+	// Only proceed if we have fields to update
+	if len(updateFields) == 0 {
+		return &pb.EditUserProfileResponse{
+			Success: false,
+			Error:   "No fields to update",
+		}, nil
+	}
+
+	updateQuery := fmt.Sprintf("UPDATE users SET %s WHERE id = $1", strings.Join(updateFields, ", "))
+	_, err = tx.Exec(ctx, updateQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user profile: %v", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.EditUserProfileResponse{
+		Success: true,
+	}, nil
+}
+
+func (h *UserHandler) CreateGroup(ctx context.Context, req *pb.CreateGroupRequest) (*pb.CreateGroupResponse, error) {
+	if req.CreatorId == "" || req.GroupName == "" {
+		return &pb.CreateGroupResponse{
+			Success: false,
+			Error:   "Creator ID and group name are required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// First,  if the creator exists
+	var creatorExists bool
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.CreatorId).Scan(&creatorExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if creator exists: %v", err)
+	}
+
+	if !creatorExists {
+		return &pb.CreateGroupResponse{
+			Success: false,
+			Error:   "Creator user not found",
+		}, nil
+	}
+
+	groupID := uuid.New().String()
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO groups (
+			id, name, description, color, creator_id, created_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6
+		)
+	`, groupID, req.GroupName, req.Description, req.Color, req.CreatorId, time.Now())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create group: %v", err)
+	}
+
+	// Add the creator as a member with admin privileges
+	_, err = tx.Exec(ctx, `
+		INSERT INTO group_members (
+			group_id, user_id, role, joined_at
+		) VALUES (
+			$1, $2, 'admin', $3
+		)
+	`, groupID, req.CreatorId, time.Now())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to add creator to group: %v", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.CreateGroupResponse{
+		Success: true,
+		GroupId: groupID,
+	}, nil
+}
+
+func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRequest) (*pb.GetGroupTasksResponse, error) {
+	if req.GroupId == "" {
+		return &pb.GetGroupTasksResponse{
+			Success: false,
+			Error:   "Group ID is required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// First, check if the group exists
+	var groupExists bool
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", req.GroupId).Scan(&groupExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if group exists: %v", err)
+	}
+
+	if !groupExists {
+		return &pb.GetGroupTasksResponse{
+			Success: false,
+			Error:   "Group not found",
+		}, nil
+	}
+
+	// Check if the requester is a member of the group
+	var isMember bool
+	if req.RequesterId != "" {
+		err = tx.QueryRow(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM group_members 
+				WHERE group_id = $1 AND user_id = $2
+			)
+		`, req.GroupId, req.RequesterId).Scan(&isMember)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check group membership: %v", err)
+		}
+	}
+
+	// Only group members can view group tasks
+	if !isMember && req.RequesterId != "" {
+		return &pb.GetGroupTasksResponse{
+			Success: false,
+			Error:   "Requester is not a member of this group",
+		}, nil
+	}
+
+	// Query tasks associated with this group
+	rows, err := tx.Query(ctx, `
+		SELECT 
+			id, user_id, name, description, created_at, deadline, author, "group", group_id,
+			assigned_to, task_difficulty, custom_hours, mentioned_in_event,
+			is_completed, proof_url, privacy_level, privacy_except_ids,
+			flag_status, flag_color, flag_name, display_order, 
+			needs_confirmation, is_confirmed, confirmation_user_id, confirmed_at
+		FROM tasks
+		WHERE group_id = $1
+	`, req.GroupId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query group tasks: %v", err)
+	}
+	defer rows.Close()
+
+	var tasks []*pb.Task
+	for rows.Next() {
+		var (
+			id, userID, name, description, author, group, groupID, taskDifficulty, privacyLevel string
+			createdAt                                                                           time.Time
+			deadlinePtr                                                                         *time.Time
+			assignedTo, privacyExceptIDs                                                        []string
+			customHours                                                                         int32
+			customHoursPtr                                                                      *int32
+			mentionedInEvent, isCompleted, flagStatus                                           bool
+			proofURL, flagColor, flagName                                                       string
+			proofURLPtr, flagColorPtr, flagNamePtr                                              *string
+			displayOrder                                                                        int32
+			needsConfirmation, isConfirmed                                                      bool
+			confirmationUserID                                                                  string
+			confirmationUserIDPtr                                                               *string
+			confirmedAt                                                                         *time.Time
+		)
+
+		err := rows.Scan(
+			&id, &userID, &name, &description, &createdAt, &deadlinePtr, &author, &group, &groupID,
+			&assignedTo, &taskDifficulty, &customHoursPtr, &mentionedInEvent,
+			&isCompleted, &proofURLPtr, &privacyLevel, &privacyExceptIDs,
+			&flagStatus, &flagColorPtr, &flagNamePtr, &displayOrder,
+			&needsConfirmation, &isConfirmed, &confirmationUserIDPtr, &confirmedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task row: %v", err)
+		}
+
+		// Convert nullable fields
+		if customHoursPtr != nil {
+			customHours = *customHoursPtr
+		}
+		if proofURLPtr != nil {
+			proofURL = *proofURLPtr
+		}
+		if flagColorPtr != nil {
+			flagColor = *flagColorPtr
+		}
+		if flagNamePtr != nil {
+			flagName = *flagNamePtr
+		}
+		if confirmationUserIDPtr != nil {
+			confirmationUserID = *confirmationUserIDPtr
+		}
+
+		// Convert timestamps to protobuf format
+		createdAtProto := timestamppb.New(createdAt)
+		var deadlineProto, confirmedAtProto *timestamppb.Timestamp
+		if deadlinePtr != nil {
+			deadlineProto = timestamppb.New(*deadlinePtr)
+		}
+		if confirmedAt != nil {
+			confirmedAtProto = timestamppb.New(*confirmedAt)
+		}
+
+		task := &pb.Task{
+			Id:               id,
+			UserId:           userID,
+			Name:             name,
+			Description:      description,
+			CreatedAt:        createdAtProto,
+			Deadline:         deadlineProto,
+			Author:           author,
+			Group:            group,
+			GroupId:          groupID,
+			AssignedTo:       assignedTo,
+			TaskDifficulty:   taskDifficulty,
+			CustomHours:      customHours,
+			MentionedInEvent: mentionedInEvent,
+			Completion: &pb.CompletionStatus{
+				IsCompleted:        isCompleted,
+				ProofUrl:           proofURL,
+				NeedsConfirmation:  needsConfirmation,
+				IsConfirmed:        isConfirmed,
+				ConfirmationUserId: confirmationUserID,
+				ConfirmedAt:        confirmedAtProto,
+			},
+			Privacy: &pb.PrivacySettings{
+				Level:     privacyLevel,
+				ExceptIds: privacyExceptIDs,
+			},
+			FlagStatus:   flagStatus,
+			FlagColor:    flagColor,
+			FlagName:     flagName,
+			DisplayOrder: displayOrder,
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating task rows: %v", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.GetGroupTasksResponse{
+		Success: true,
+		Tasks:   tasks,
+	}, nil
+}
+
+func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRequest) (*pb.InviteToGroupResponse, error) {
+	if req.GroupId == "" || req.InviterId == "" || req.InviteeId == "" {
+		return &pb.InviteToGroupResponse{
+			Success: false,
+			Error:   "Group ID, inviter ID, and invitee ID are required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Check if the group exists
+	var groupExists bool
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", req.GroupId).Scan(&groupExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if group exists: %v", err)
+	}
+
+	if !groupExists {
+		return &pb.InviteToGroupResponse{
+			Success: false,
+			Error:   "Group not found",
+		}, nil
+	}
+
+	// Check if the inviter is a member with appropriate permissions
+	var inviterRole string
+	err = tx.QueryRow(ctx, `
+		SELECT role FROM group_members 
+		WHERE group_id = $1 AND user_id = $2
+	`, req.GroupId, req.InviterId).Scan(&inviterRole)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return &pb.InviteToGroupResponse{
+				Success: false,
+				Error:   "Inviter is not a member of this group",
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to check inviter role: %v", err)
+	}
+
+	// Only admins or members with invite permissions can invite others
+	if inviterRole != "admin" && inviterRole != "member" {
+		return &pb.InviteToGroupResponse{
+			Success: false,
+			Error:   "Inviter does not have permission to invite others",
+		}, nil
+	}
+
+	// Check if the invitee exists
+	var inviteeExists bool
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.InviteeId).Scan(&inviteeExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if invitee exists: %v", err)
+	}
+
+	if !inviteeExists {
+		return &pb.InviteToGroupResponse{
+			Success: false,
+			Error:   "Invitee user not found",
+		}, nil
+	}
+
+	// Check if the invitee is already a member
+	var alreadyMember bool
+	err = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM group_members 
+			WHERE group_id = $1 AND user_id = $2
+		)
+	`, req.GroupId, req.InviteeId).Scan(&alreadyMember)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if invitee is already a member: %v", err)
+	}
+
+	if alreadyMember {
+		return &pb.InviteToGroupResponse{
+			Success: false,
+			Error:   "Invitee is already a member of this group",
+		}, nil
+	}
+
+	// Check if there's already a pending invite
+	var pendingInviteExists bool
+	err = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM group_invites 
+			WHERE group_id = $1 AND invitee_id = $2 AND status = 'pending'
+		)
+	`, req.GroupId, req.InviteeId).Scan(&pendingInviteExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for pending invites: %v", err)
+	}
+
+	if pendingInviteExists {
+		return &pb.InviteToGroupResponse{
+			Success: false,
+			Error:   "There's already a pending invite for this user",
+		}, nil
+	}
+
+	// Generate a new invite ID
+	inviteID := uuid.New().String()
+
+	// Create the invite
+	_, err = tx.Exec(ctx, `
+		INSERT INTO group_invites (
+			id, group_id, inviter_id, invitee_id, status, created_at
+		) VALUES (
+			$1, $2, $3, $4, 'pending', $5
+		)
+	`, inviteID, req.GroupId, req.InviterId, req.InviteeId, time.Now())
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create group invite: %v", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.InviteToGroupResponse{
+		Success:  true,
+		InviteId: inviteID,
+	}, nil
+}
+
+func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroupInviteRequest) (*pb.AcceptGroupInviteResponse, error) {
+	if req.InviteId == "" || req.UserId == "" {
+		return &pb.AcceptGroupInviteResponse{
+			Success: false,
+			Error:   "Invite ID and user ID are required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Get the invite details
+	var groupID, inviteeID string
+	var status string
+	err = tx.QueryRow(ctx, `
+		SELECT group_id, invitee_id, status
+		FROM group_invites
+		WHERE id = $1
+	`, req.InviteId).Scan(&groupID, &inviteeID, &status)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return &pb.AcceptGroupInviteResponse{
+				Success: false,
+				Error:   "Invite not found",
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to get invite details: %v", err)
+	}
+
+	// Verify that the user accepting/rejecting is the invitee
+	if inviteeID != req.UserId {
+		return &pb.AcceptGroupInviteResponse{
+			Success: false,
+			Error:   "Only the invitee can accept or reject this invite",
+		}, nil
+	}
+
+	// Check if the invite is still pending
+	if status != "pending" {
+		return &pb.AcceptGroupInviteResponse{
+			Success: false,
+			Error:   fmt.Sprintf("Invite is already %s", status),
+		}, nil
+	}
+
+	// Update the invite status based on the accept flag
+	newStatus := "rejected"
+	if req.Accept {
+		newStatus = "accepted"
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE group_invites
+		SET status = $1, responded_at = $2
+		WHERE id = $3
+	`, newStatus, time.Now(), req.InviteId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update invite status: %v", err)
+	}
+
+	// If accepted, add user to the group
+	if req.Accept {
+		// Check if the group still exists
+		var groupExists bool
+		err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", groupID).Scan(&groupExists)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check if group exists: %v", err)
+		}
+
+		if !groupExists {
+			return &pb.AcceptGroupInviteResponse{
+				Success: false,
+				Error:   "Group no longer exists",
+			}, nil
+		}
+
+		// Add user to the group
+		_, err = tx.Exec(ctx, `
+			INSERT INTO group_members (
+				group_id, user_id, role, joined_at
+			) VALUES (
+				$1, $2, 'member', $3
+			)
+		`, groupID, req.UserId, time.Now())
+		if err != nil {
+			return nil, fmt.Errorf("failed to add user to group: %v", err)
+		}
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.AcceptGroupInviteResponse{
+		Success: true,
+	}, nil
+}
+
+func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFromGroupRequest) (*pb.KickUserFromGroupResponse, error) {
+	if req.GroupId == "" || req.AdminId == "" || req.UserId == "" {
+		return &pb.KickUserFromGroupResponse{
+			Success: false,
+			Error:   "Group ID, admin ID, and user ID are required",
+		}, nil
+	}
+
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Check if the group exists
+	var groupExists bool
+	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", req.GroupId).Scan(&groupExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if group exists: %v", err)
+	}
+
+	if !groupExists {
+		return &pb.KickUserFromGroupResponse{
+			Success: false,
+			Error:   "Group not found",
+		}, nil
+	}
+
+	// Check if the admin is the creator of the group
+	var creatorId string
+	err = tx.QueryRow(ctx, "SELECT creator_id FROM groups WHERE id = $1", req.GroupId).Scan(&creatorId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group creator: %v", err)
+	}
+
+	if creatorId != req.AdminId {
+		return &pb.KickUserFromGroupResponse{
+			Success: false,
+			Error:   "Only the group creator can remove members",
+		}, nil
+	}
+
+	// Check if the user to be kicked is a member
+	var isMember bool
+	err = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM group_members 
+			WHERE group_id = $1 AND user_id = $2
+		)
+	`, req.GroupId, req.UserId).Scan(&isMember)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user is a member: %v", err)
+	}
+
+	if !isMember {
+		return &pb.KickUserFromGroupResponse{
+			Success: false,
+			Error:   "User is not a member of this group",
+		}, nil
+	}
+
+	// Cannot kick the creator
+	if req.UserId == creatorId {
+		return &pb.KickUserFromGroupResponse{
+			Success: false,
+			Error:   "Cannot remove the group creator",
+		}, nil
+	}
+
+	// Remove the user from the group
+	_, err = tx.Exec(ctx, `
+		DELETE FROM group_members
+		WHERE group_id = $1 AND user_id = $2
+	`, req.GroupId, req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove user from group: %v", err)
+	}
+
+	// Cancel any pending invites for this user to this group
+	_, err = tx.Exec(ctx, `
+		UPDATE group_invites
+		SET status = 'cancelled', responded_at = $1
+		WHERE group_id = $2 AND invitee_id = $3 AND status = 'pending'
+	`, time.Now(), req.GroupId, req.UserId)
+	if err != nil {
+		log.Printf("Warning: Failed to cancel pending invites: %v", err)
+		// Continue execution even if this fails
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return &pb.KickUserFromGroupResponse{
+		Success: true,
 	}, nil
 }

@@ -110,7 +110,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 		`, req.Task.Author, eventTargetUserID, eventType).Scan(&recentEventID)
 
 		if err == nil {
-			// Found a recent event, update it to include this task
 			_, err = tx.Exec(ctx, `
 				UPDATE events
 				SET task_ids = array_append(task_ids, $1)
@@ -118,7 +117,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 			`, taskID, recentEventID)
 
 			if err != nil {
-				// Log but don't fail the transaction
 				log.Printf("failed to update event with new task: %v", err)
 			} else {
 				log.Printf("successfully added task %s to existing event %s", taskID, recentEventID)
@@ -133,11 +131,9 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 			}
 		}
 	} else if req.Task.UserId == req.Task.Author {
-		// This is a task the user created for themselves
 		eventType = "new_tasks_added"
 		eventTargetUserID = req.Task.UserId
 
-		// Check if there's a recent "new tasks added" event we can update
 		var recentEventID string
 		err = tx.QueryRow(ctx, `
 			SELECT id FROM events
@@ -150,7 +146,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 		`, req.Task.UserId, eventTargetUserID, eventType).Scan(&recentEventID)
 
 		if err == nil {
-			// Found a recent event, update it to include this task
 			_, err = tx.Exec(ctx, `
 				UPDATE events
 				SET task_ids = array_append(task_ids, $1)
@@ -158,7 +153,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 			`, taskID, recentEventID)
 
 			if err != nil {
-				// Log but don't fail the transaction
 				log.Printf("failed to update event with new task: %v", err)
 			} else {
 				log.Printf("successfully added task %s to existing event %s", taskID, recentEventID)
@@ -219,9 +213,8 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 
 	taskIDs := make([]string, len(req.Tasks))
 
-	// Group tasks by assignee to create appropriate events
 	tasksForSelf := []string{}
-	tasksForOthers := make(map[string][]string) // map[assigneeID][]taskID
+	tasksForOthers := make(map[string][]string)
 
 	for i, task := range req.Tasks {
 		taskID := task.Id
@@ -286,12 +279,9 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 			return nil, fmt.Errorf("failed to insert task %d: %v", i, err)
 		}
 
-		// Group tasks for events
 		if task.UserId == task.Author {
-			// Task created by user for themselves
 			tasksForSelf = append(tasksForSelf, strings.ToLower(taskID))
 		} else if len(task.AssignedTo) > 0 {
-			// Task assigned to others
 			for _, assigneeID := range task.AssignedTo {
 				if _, exists := tasksForOthers[assigneeID]; !exists {
 					tasksForOthers[assigneeID] = []string{}
@@ -301,11 +291,8 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 		}
 	}
 
-	// Create events for tasks
-	// 1. For tasks created by user for themselves
 	if len(tasksForSelf) > 0 {
-		// Check if there's a recent "new tasks added" event to update
-		userID := req.Tasks[0].UserId // Assuming all tasks have same userID in batch
+		userID := req.Tasks[0].UserId
 		var recentEventID string
 		err = tx.QueryRow(ctx, `
 			SELECT id FROM events
@@ -318,7 +305,6 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 		`, userID).Scan(&recentEventID)
 
 		if err == nil {
-			// Update existing event with new tasks
 			for _, taskID := range tasksForSelf {
 				_, err = tx.Exec(ctx, `
 					UPDATE events
@@ -331,7 +317,7 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 				}
 			}
 		} else if err == pgx.ErrNoRows {
-			// Create new event for self-tasks
+			log.Println("creating new event for newly-added")
 			eventID := uuid.New().String()
 			now := time.Now()
 			expiresAt := now.Add(24 * time.Hour)
@@ -353,11 +339,9 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 		}
 	}
 
-	// 2. For tasks assigned to others
 	for assigneeID, assignedTasks := range tasksForOthers {
-		authorID := req.Tasks[0].Author // Assuming same author for all tasks in batch
+		authorID := req.Tasks[0].Author
 
-		// Check for recent "newly received" event for this assignee
 		var recentEventID string
 		err = tx.QueryRow(ctx, `
 			SELECT id FROM events
@@ -370,7 +354,6 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 		`, authorID, assigneeID).Scan(&recentEventID)
 
 		if err == nil {
-			// Update existing event with new tasks
 			for _, taskID := range assignedTasks {
 				_, err = tx.Exec(ctx, `
 					UPDATE events
@@ -383,7 +366,6 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 				}
 			}
 		} else if err == pgx.ErrNoRows {
-			// Create new event for assigned tasks
 			eventID := uuid.New().String()
 			now := time.Now()
 			expiresAt := now.Add(24 * time.Hour)
@@ -849,11 +831,9 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 		exceptIDsArray = fmt.Sprintf("{%s}", strings.Join(quoteStrings(req.Task.Privacy.ExceptIds), ","))
 	}
 
-	// Determine if task is being completed and what kind of event to create
 	isBeingCompleted := !oldIsCompleted && req.Task.Completion.IsCompleted
 	needsConfirmation := req.Task.Completion.NeedsConfirmation
 
-	// Update the task
 	result, err := tx.Exec(ctx, `
     UPDATE tasks SET
         name = $1,
@@ -872,7 +852,10 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
         display_order = $14,
 		proof_needed = $18,
 		proof_description = $19,
-        needs_confirmation = $15
+        needs_confirmation = $15,
+		confirmation_user_id=NULL,
+		confirmed_at=NULL,
+		is_confirmed=false
     WHERE id = $16 AND user_id = $17
     RETURNING id
     `,
@@ -908,7 +891,6 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 		}, nil
 	}
 
-	// Handle event creation based on task status changes
 	if isBeingCompleted || req.Task.Completion.NeedsConfirmation {
 		if req.Task.Completion.NeedsConfirmation {
 			// Create "requires_confirmation" event
@@ -931,12 +913,10 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 				log.Printf("failed to create requires_confirmation event: %v", err)
 			}
 		} else {
-			// Create "newly_completed" event
 			eventID := uuid.New().String()
 			now := time.Now()
 			expiresAt := now.Add(24 * time.Hour)
 
-			// Choose a random event size
 			sizes := []string{"small", "medium", "large"}
 			eventSize := sizes[rand.Intn(len(sizes))]
 
@@ -1007,11 +987,13 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 	var needsConfirmation bool
 	var isCompleted bool
 	var previouslyConfirmed bool
+	var previouslyRejected bool
 	err = tx.QueryRow(ctx, `
-        SELECT user_id, COALESCE(needs_confirmation, false), is_completed, COALESCE(is_confirmed, false) 
+        SELECT user_id, COALESCE(needs_confirmation, false), is_completed, 
+               COALESCE(is_confirmed, false), COALESCE(is_rejected, false)
         FROM tasks 
         WHERE id = $1
-    `, req.TaskId).Scan(&userID, &needsConfirmation, &isCompleted, &previouslyConfirmed)
+    `, req.TaskId).Scan(&userID, &needsConfirmation, &isCompleted, &previouslyConfirmed, &previouslyRejected)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1030,14 +1012,30 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		}, nil
 	}
 
-	_, err = tx.Exec(ctx, `
-        UPDATE tasks 
-        SET is_confirmed = $1, 
-            confirmation_user_id = $2,
-			is_completed = $4, 
-            confirmed_at = NOW() 
-        WHERE id = $3
-    `, req.IsConfirmed, req.ConfirmerId, req.TaskId, req.IsConfirmed)
+	// Update task based on confirmation status
+	if req.IsConfirmed {
+		// Confirm the task
+		_, err = tx.Exec(ctx, `
+            UPDATE tasks 
+            SET is_confirmed = true, 
+                is_rejected = false,
+                confirmation_user_id = $2,
+                is_completed = true, 
+                confirmed_at = NOW() 
+            WHERE id = $1
+        `, req.TaskId, req.ConfirmerId)
+	} else {
+		// Reject the task
+		_, err = tx.Exec(ctx, `
+            UPDATE tasks 
+            SET is_confirmed = false, 
+                is_rejected = true,
+                confirmation_user_id = $2,
+                is_completed = false, 
+                confirmed_at = NOW() 
+            WHERE id = $1
+        `, req.TaskId, req.ConfirmerId)
+	}
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task confirmation: %v", err)
@@ -1045,11 +1043,11 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 
 	// Clean up any "requires_confirmation" events for this task
 	_, err = tx.Exec(ctx, `
-		UPDATE events
-		SET expires_at = NOW() - INTERVAL '1 second' -- Expire immediately
-		WHERE event_type = 'requires_confirmation'
-		AND $1 = ANY(task_ids)
-	`, req.TaskId)
+        UPDATE events
+        SET expires_at = NOW() - INTERVAL '1 second' -- Expire immediately
+        WHERE event_type = 'requires_confirmation'
+        AND $1 = ANY(task_ids)
+    `, req.TaskId)
 
 	if err != nil {
 		log.Printf("failed to expire requires_confirmation event: %v", err)
@@ -1067,13 +1065,13 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		eventSize := sizes[rand.Intn(len(sizes))]
 
 		_, err = tx.Exec(ctx, `
-			INSERT INTO events (
-				id, user_id, target_user_id, event_type, event_size, 
-				created_at, expires_at, task_ids, likes_count, comments_count
-			) VALUES (
-				$1, $2, $3, 'newly_completed', $4, $5, $6, $7, 0, 0
-			)
-		`, eventID, userID, userID, eventSize, now, expiresAt, []string{req.TaskId})
+            INSERT INTO events (
+                id, user_id, target_user_id, event_type, event_size, 
+                created_at, expires_at, task_ids, likes_count, comments_count
+            ) VALUES (
+                $1, $2, $3, 'newly_completed', $4, $5, $6, $7, 0, 0
+            )
+        `, eventID, userID, userID, eventSize, now, expiresAt, []string{req.TaskId})
 
 		if err != nil {
 			log.Printf("failed to create newly_completed event: %v", err)
@@ -1084,13 +1082,13 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		var completedTodayCount int
 
 		err := tx.QueryRow(ctx, `
-			SELECT COUNT(*) FROM tasks 
-			WHERE user_id = $1 
-			AND is_completed = true
-			AND is_confirmed = true
-			AND DATE(confirmed_at) = $2::date
-			AND id != $3 -- Don't count the current task
-		`, userID, today, req.TaskId).Scan(&completedTodayCount)
+            SELECT COUNT(*) FROM tasks 
+            WHERE user_id = $1 
+            AND is_completed = true
+            AND is_confirmed = true
+            AND DATE(confirmed_at) = $2::date
+            AND id != $3 -- Don't count the current task
+        `, userID, today, req.TaskId).Scan(&completedTodayCount)
 
 		if err != nil {
 			log.Printf("failed to check completed tasks count: %v", err)
@@ -1118,4 +1116,49 @@ func quoteStrings(strs []string) []string {
 		quoted[i] = fmt.Sprintf("\"%s\"", s)
 	}
 	return quoted
+}
+
+// Add this to handlers/tasks.go
+
+func (h *TaskHandler) GetUsersTasksBatch(ctx context.Context, req *pb.GetUsersTasksBatchRequest) (*pb.GetUsersTasksBatchResponse, error) {
+	if len(req.UserIds) == 0 {
+		return &pb.GetUsersTasksBatchResponse{
+			Success: false,
+			Error:   "No user IDs provided",
+		}, nil
+	}
+
+	// Limit the maximum number of users to fetch tasks for in a single request
+	maxUsers := 20
+	if len(req.UserIds) > maxUsers {
+		req.UserIds = req.UserIds[:maxUsers]
+	}
+
+	// Create a map to store tasks for each user
+	userTasks := make(map[string]*pb.UserTasksData)
+
+	// Process each user ID
+	for _, userID := range req.UserIds {
+		// Reuse the GetUserTasks functionality to fetch tasks with proper privacy settings
+		tasksResp, err := h.GetUserTasks(ctx, &pb.GetUserTasksRequest{
+			UserId:      userID,
+			RequesterId: req.RequesterId,
+		})
+
+		if err != nil {
+			log.Printf("Error fetching tasks for user %s: %v", userID, err)
+			continue // Skip this user and continue with others
+		}
+
+		if tasksResp.Success {
+			userTasks[userID] = &pb.UserTasksData{
+				Tasks: tasksResp.Tasks,
+			}
+		}
+	}
+
+	return &pb.GetUsersTasksBatchResponse{
+		Success:   true,
+		UserTasks: userTasks,
+	}, nil
 }

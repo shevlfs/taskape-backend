@@ -43,6 +43,15 @@ const (
 	BackendRequests_AddEventComment_FullMethodName         = "/taskapebackend.BackendRequests/AddEventComment"
 	BackendRequests_GetEventComments_FullMethodName        = "/taskapebackend.BackendRequests/GetEventComments"
 	BackendRequests_DeleteEventComment_FullMethodName      = "/taskapebackend.BackendRequests/DeleteEventComment"
+	BackendRequests_GetUsersBatch_FullMethodName           = "/taskapebackend.BackendRequests/GetUsersBatch"
+	BackendRequests_GetUsersTasksBatch_FullMethodName      = "/taskapebackend.BackendRequests/GetUsersTasksBatch"
+	BackendRequests_EditUserProfile_FullMethodName         = "/taskapebackend.BackendRequests/EditUserProfile"
+	BackendRequests_CreateGroup_FullMethodName             = "/taskapebackend.BackendRequests/CreateGroup"
+	BackendRequests_GetGroupTasks_FullMethodName           = "/taskapebackend.BackendRequests/GetGroupTasks"
+	BackendRequests_InviteToGroup_FullMethodName           = "/taskapebackend.BackendRequests/InviteToGroup"
+	BackendRequests_AcceptGroupInvite_FullMethodName       = "/taskapebackend.BackendRequests/AcceptGroupInvite"
+	BackendRequests_KickUserFromGroup_FullMethodName       = "/taskapebackend.BackendRequests/KickUserFromGroup"
+	BackendRequests_GetUserRelatedEvents_FullMethodName    = "/taskapebackend.BackendRequests/GetUserRelatedEvents"
 )
 
 // BackendRequestsClient is the client API for BackendRequests service.
@@ -73,6 +82,15 @@ type BackendRequestsClient interface {
 	AddEventComment(ctx context.Context, in *AddEventCommentRequest, opts ...grpc.CallOption) (*AddEventCommentResponse, error)
 	GetEventComments(ctx context.Context, in *GetEventCommentsRequest, opts ...grpc.CallOption) (*GetEventCommentsResponse, error)
 	DeleteEventComment(ctx context.Context, in *DeleteEventCommentRequest, opts ...grpc.CallOption) (*DeleteEventCommentResponse, error)
+	GetUsersBatch(ctx context.Context, in *GetUsersBatchRequest, opts ...grpc.CallOption) (*GetUsersBatchResponse, error)
+	GetUsersTasksBatch(ctx context.Context, in *GetUsersTasksBatchRequest, opts ...grpc.CallOption) (*GetUsersTasksBatchResponse, error)
+	EditUserProfile(ctx context.Context, in *EditUserProfileRequest, opts ...grpc.CallOption) (*EditUserProfileResponse, error)
+	CreateGroup(ctx context.Context, in *CreateGroupRequest, opts ...grpc.CallOption) (*CreateGroupResponse, error)
+	GetGroupTasks(ctx context.Context, in *GetGroupTasksRequest, opts ...grpc.CallOption) (*GetGroupTasksResponse, error)
+	InviteToGroup(ctx context.Context, in *InviteToGroupRequest, opts ...grpc.CallOption) (*InviteToGroupResponse, error)
+	AcceptGroupInvite(ctx context.Context, in *AcceptGroupInviteRequest, opts ...grpc.CallOption) (*AcceptGroupInviteResponse, error)
+	KickUserFromGroup(ctx context.Context, in *KickUserFromGroupRequest, opts ...grpc.CallOption) (*KickUserFromGroupResponse, error)
+	GetUserRelatedEvents(ctx context.Context, in *GetUserRelatedEventsRequest, opts ...grpc.CallOption) (*GetUserRelatedEventsResponse, error)
 }
 
 type backendRequestsClient struct {
@@ -323,6 +341,96 @@ func (c *backendRequestsClient) DeleteEventComment(ctx context.Context, in *Dele
 	return out, nil
 }
 
+func (c *backendRequestsClient) GetUsersBatch(ctx context.Context, in *GetUsersBatchRequest, opts ...grpc.CallOption) (*GetUsersBatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUsersBatchResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUsersBatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) GetUsersTasksBatch(ctx context.Context, in *GetUsersTasksBatchRequest, opts ...grpc.CallOption) (*GetUsersTasksBatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUsersTasksBatchResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUsersTasksBatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) EditUserProfile(ctx context.Context, in *EditUserProfileRequest, opts ...grpc.CallOption) (*EditUserProfileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EditUserProfileResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_EditUserProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) CreateGroup(ctx context.Context, in *CreateGroupRequest, opts ...grpc.CallOption) (*CreateGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateGroupResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_CreateGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) GetGroupTasks(ctx context.Context, in *GetGroupTasksRequest, opts ...grpc.CallOption) (*GetGroupTasksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGroupTasksResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetGroupTasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) InviteToGroup(ctx context.Context, in *InviteToGroupRequest, opts ...grpc.CallOption) (*InviteToGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InviteToGroupResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_InviteToGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) AcceptGroupInvite(ctx context.Context, in *AcceptGroupInviteRequest, opts ...grpc.CallOption) (*AcceptGroupInviteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcceptGroupInviteResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_AcceptGroupInvite_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) KickUserFromGroup(ctx context.Context, in *KickUserFromGroupRequest, opts ...grpc.CallOption) (*KickUserFromGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(KickUserFromGroupResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_KickUserFromGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *backendRequestsClient) GetUserRelatedEvents(ctx context.Context, in *GetUserRelatedEventsRequest, opts ...grpc.CallOption) (*GetUserRelatedEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserRelatedEventsResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUserRelatedEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendRequestsServer is the server API for BackendRequests service.
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
@@ -351,6 +459,15 @@ type BackendRequestsServer interface {
 	AddEventComment(context.Context, *AddEventCommentRequest) (*AddEventCommentResponse, error)
 	GetEventComments(context.Context, *GetEventCommentsRequest) (*GetEventCommentsResponse, error)
 	DeleteEventComment(context.Context, *DeleteEventCommentRequest) (*DeleteEventCommentResponse, error)
+	GetUsersBatch(context.Context, *GetUsersBatchRequest) (*GetUsersBatchResponse, error)
+	GetUsersTasksBatch(context.Context, *GetUsersTasksBatchRequest) (*GetUsersTasksBatchResponse, error)
+	EditUserProfile(context.Context, *EditUserProfileRequest) (*EditUserProfileResponse, error)
+	CreateGroup(context.Context, *CreateGroupRequest) (*CreateGroupResponse, error)
+	GetGroupTasks(context.Context, *GetGroupTasksRequest) (*GetGroupTasksResponse, error)
+	InviteToGroup(context.Context, *InviteToGroupRequest) (*InviteToGroupResponse, error)
+	AcceptGroupInvite(context.Context, *AcceptGroupInviteRequest) (*AcceptGroupInviteResponse, error)
+	KickUserFromGroup(context.Context, *KickUserFromGroupRequest) (*KickUserFromGroupResponse, error)
+	GetUserRelatedEvents(context.Context, *GetUserRelatedEventsRequest) (*GetUserRelatedEventsResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
 }
 
@@ -432,6 +549,33 @@ func (UnimplementedBackendRequestsServer) GetEventComments(context.Context, *Get
 }
 func (UnimplementedBackendRequestsServer) DeleteEventComment(context.Context, *DeleteEventCommentRequest) (*DeleteEventCommentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteEventComment not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUsersBatch(context.Context, *GetUsersBatchRequest) (*GetUsersBatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUsersBatch not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUsersTasksBatch(context.Context, *GetUsersTasksBatchRequest) (*GetUsersTasksBatchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUsersTasksBatch not implemented")
+}
+func (UnimplementedBackendRequestsServer) EditUserProfile(context.Context, *EditUserProfileRequest) (*EditUserProfileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EditUserProfile not implemented")
+}
+func (UnimplementedBackendRequestsServer) CreateGroup(context.Context, *CreateGroupRequest) (*CreateGroupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateGroup not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetGroupTasks(context.Context, *GetGroupTasksRequest) (*GetGroupTasksResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGroupTasks not implemented")
+}
+func (UnimplementedBackendRequestsServer) InviteToGroup(context.Context, *InviteToGroupRequest) (*InviteToGroupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InviteToGroup not implemented")
+}
+func (UnimplementedBackendRequestsServer) AcceptGroupInvite(context.Context, *AcceptGroupInviteRequest) (*AcceptGroupInviteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AcceptGroupInvite not implemented")
+}
+func (UnimplementedBackendRequestsServer) KickUserFromGroup(context.Context, *KickUserFromGroupRequest) (*KickUserFromGroupResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method KickUserFromGroup not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUserRelatedEvents(context.Context, *GetUserRelatedEventsRequest) (*GetUserRelatedEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserRelatedEvents not implemented")
 }
 func (UnimplementedBackendRequestsServer) mustEmbedUnimplementedBackendRequestsServer() {}
 func (UnimplementedBackendRequestsServer) testEmbeddedByValue()                         {}
@@ -886,6 +1030,168 @@ func _BackendRequests_DeleteEventComment_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_GetUsersBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUsersBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUsersBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUsersBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUsersBatch(ctx, req.(*GetUsersBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_GetUsersTasksBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUsersTasksBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUsersTasksBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUsersTasksBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUsersTasksBatch(ctx, req.(*GetUsersTasksBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_EditUserProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EditUserProfileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).EditUserProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_EditUserProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).EditUserProfile(ctx, req.(*EditUserProfileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_CreateGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).CreateGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_CreateGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).CreateGroup(ctx, req.(*CreateGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_GetGroupTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGroupTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetGroupTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetGroupTasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetGroupTasks(ctx, req.(*GetGroupTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_InviteToGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InviteToGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).InviteToGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_InviteToGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).InviteToGroup(ctx, req.(*InviteToGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_AcceptGroupInvite_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcceptGroupInviteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).AcceptGroupInvite(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_AcceptGroupInvite_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).AcceptGroupInvite(ctx, req.(*AcceptGroupInviteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_KickUserFromGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KickUserFromGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).KickUserFromGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_KickUserFromGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).KickUserFromGroup(ctx, req.(*KickUserFromGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BackendRequests_GetUserRelatedEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserRelatedEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUserRelatedEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUserRelatedEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUserRelatedEvents(ctx, req.(*GetUserRelatedEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendRequests_ServiceDesc is the grpc.ServiceDesc for BackendRequests service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -988,6 +1294,42 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteEventComment",
 			Handler:    _BackendRequests_DeleteEventComment_Handler,
+		},
+		{
+			MethodName: "GetUsersBatch",
+			Handler:    _BackendRequests_GetUsersBatch_Handler,
+		},
+		{
+			MethodName: "GetUsersTasksBatch",
+			Handler:    _BackendRequests_GetUsersTasksBatch_Handler,
+		},
+		{
+			MethodName: "EditUserProfile",
+			Handler:    _BackendRequests_EditUserProfile_Handler,
+		},
+		{
+			MethodName: "CreateGroup",
+			Handler:    _BackendRequests_CreateGroup_Handler,
+		},
+		{
+			MethodName: "GetGroupTasks",
+			Handler:    _BackendRequests_GetGroupTasks_Handler,
+		},
+		{
+			MethodName: "InviteToGroup",
+			Handler:    _BackendRequests_InviteToGroup_Handler,
+		},
+		{
+			MethodName: "AcceptGroupInvite",
+			Handler:    _BackendRequests_AcceptGroupInvite_Handler,
+		},
+		{
+			MethodName: "KickUserFromGroup",
+			Handler:    _BackendRequests_KickUserFromGroup_Handler,
+		},
+		{
+			MethodName: "GetUserRelatedEvents",
+			Handler:    _BackendRequests_GetUserRelatedEvents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
