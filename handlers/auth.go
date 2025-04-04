@@ -87,7 +87,7 @@ func (h *AuthHandler) LoginNewUser(ctx context.Context, req *pb.NewUserLoginRequ
 			}
 		}
 
-		// Add this to retrieve the user ID even when profile doesn't exist
+		
 		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE phone = $1", req.Phone).Scan(&existingID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user ID: %v", err)

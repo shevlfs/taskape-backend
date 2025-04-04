@@ -52,6 +52,7 @@ const (
 	BackendRequests_AcceptGroupInvite_FullMethodName       = "/taskapebackend.BackendRequests/AcceptGroupInvite"
 	BackendRequests_KickUserFromGroup_FullMethodName       = "/taskapebackend.BackendRequests/KickUserFromGroup"
 	BackendRequests_GetUserRelatedEvents_FullMethodName    = "/taskapebackend.BackendRequests/GetUserRelatedEvents"
+	BackendRequests_GetUserStreak_FullMethodName           = "/taskapebackend.BackendRequests/GetUserStreak"
 )
 
 // BackendRequestsClient is the client API for BackendRequests service.
@@ -91,6 +92,7 @@ type BackendRequestsClient interface {
 	AcceptGroupInvite(ctx context.Context, in *AcceptGroupInviteRequest, opts ...grpc.CallOption) (*AcceptGroupInviteResponse, error)
 	KickUserFromGroup(ctx context.Context, in *KickUserFromGroupRequest, opts ...grpc.CallOption) (*KickUserFromGroupResponse, error)
 	GetUserRelatedEvents(ctx context.Context, in *GetUserRelatedEventsRequest, opts ...grpc.CallOption) (*GetUserRelatedEventsResponse, error)
+	GetUserStreak(ctx context.Context, in *GetUserStreakRequest, opts ...grpc.CallOption) (*GetUserStreakResponse, error)
 }
 
 type backendRequestsClient struct {
@@ -431,6 +433,16 @@ func (c *backendRequestsClient) GetUserRelatedEvents(ctx context.Context, in *Ge
 	return out, nil
 }
 
+func (c *backendRequestsClient) GetUserStreak(ctx context.Context, in *GetUserStreakRequest, opts ...grpc.CallOption) (*GetUserStreakResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserStreakResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetUserStreak_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendRequestsServer is the server API for BackendRequests service.
 // All implementations must embed UnimplementedBackendRequestsServer
 // for forward compatibility.
@@ -468,6 +480,7 @@ type BackendRequestsServer interface {
 	AcceptGroupInvite(context.Context, *AcceptGroupInviteRequest) (*AcceptGroupInviteResponse, error)
 	KickUserFromGroup(context.Context, *KickUserFromGroupRequest) (*KickUserFromGroupResponse, error)
 	GetUserRelatedEvents(context.Context, *GetUserRelatedEventsRequest) (*GetUserRelatedEventsResponse, error)
+	GetUserStreak(context.Context, *GetUserStreakRequest) (*GetUserStreakResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
 }
 
@@ -576,6 +589,9 @@ func (UnimplementedBackendRequestsServer) KickUserFromGroup(context.Context, *Ki
 }
 func (UnimplementedBackendRequestsServer) GetUserRelatedEvents(context.Context, *GetUserRelatedEventsRequest) (*GetUserRelatedEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserRelatedEvents not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetUserStreak(context.Context, *GetUserStreakRequest) (*GetUserStreakResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserStreak not implemented")
 }
 func (UnimplementedBackendRequestsServer) mustEmbedUnimplementedBackendRequestsServer() {}
 func (UnimplementedBackendRequestsServer) testEmbeddedByValue()                         {}
@@ -1192,6 +1208,24 @@ func _BackendRequests_GetUserRelatedEvents_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_GetUserStreak_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserStreakRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetUserStreak(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetUserStreak_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetUserStreak(ctx, req.(*GetUserStreakRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendRequests_ServiceDesc is the grpc.ServiceDesc for BackendRequests service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1330,6 +1364,10 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserRelatedEvents",
 			Handler:    _BackendRequests_GetUserRelatedEvents_Handler,
+		},
+		{
+			MethodName: "GetUserStreak",
+			Handler:    _BackendRequests_GetUserStreak_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

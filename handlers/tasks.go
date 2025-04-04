@@ -85,19 +85,14 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 		return nil, fmt.Errorf("failed to insert task: %v", err)
 	}
 
-	// Determine if we need to create an event
-	// 1. If the task is assigned to others - create a "newly received" event for them
-	// 2. If the task is for the user who created it - create a "new tasks added" event
 
 	var eventType string
 	var eventTargetUserID string
 
 	if len(req.Task.AssignedTo) > 0 && req.Task.UserId != req.Task.Author {
-		// This is a task assigned to someone by another user
 		eventType = "newly_received"
 		eventTargetUserID = req.Task.UserId
 
-		// Check if there's a recent "newly received" event we can update
 		var recentEventID string
 		err = tx.QueryRow(ctx, `
 			SELECT id FROM events
@@ -122,7 +117,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 				log.Printf("successfully added task %s to existing event %s", taskID, recentEventID)
 			}
 		} else if err == pgx.ErrNoRows {
-			// No recent event found, create a new one
 			err = createNewEventForTask(ctx, tx, req.Task.Author, eventTargetUserID, eventType, taskID)
 			if err != nil {
 				log.Printf("failed to create new event for task: %v", err)
@@ -158,7 +152,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 				log.Printf("successfully added task %s to existing event %s", taskID, recentEventID)
 			}
 		} else if err == pgx.ErrNoRows {
-			// No recent event found, create a new one
 			err = createNewEventForTask(ctx, tx, req.Task.UserId, eventTargetUserID, eventType, taskID)
 			if err != nil {
 				log.Printf("failed to create new event for task: %v", err)
@@ -184,7 +177,6 @@ func createNewEventForTask(ctx context.Context, tx pgx.Tx, userID string, target
 	now := time.Now()
 	expiresAt := now.Add(24 * time.Hour)
 
-	// Choose a random event size
 	sizes := []string{"small", "medium", "large"}
 	eventSize := sizes[rand.Intn(len(sizes))]
 
@@ -239,7 +231,6 @@ func (h *TaskHandler) CreateTasksBatch(ctx context.Context, req *pb.CreateTasksB
 			privacyExceptIds = []string{}
 		}
 
-		// Insert the task
 		_, err = tx.Exec(ctx, `
             INSERT INTO tasks (
                 id, user_id, name, description, deadline, author, "group", group_id, 
@@ -649,7 +640,6 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 	today := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 
-	// First check if the user already has a streak record
 	var exists bool
 	err = tx.QueryRow(ctx, `
         SELECT EXISTS(SELECT 1 FROM user_streaks WHERE user_id = $1)
@@ -660,7 +650,6 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 	}
 
 	if !exists {
-		// Create a new streak record for this user
 		_, err = tx.Exec(ctx, `
             INSERT INTO user_streaks (
                 user_id, current_streak, longest_streak, 
@@ -674,7 +663,6 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 		return nil
 	}
 
-	// User has an existing streak record - update it
 	var currentStreak int
 	var longestStreak int
 	var lastCompletedDate *time.Time
@@ -694,28 +682,21 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 		return fmt.Errorf("failed to get user streak: %v", err)
 	}
 
-	// Determine if streak continues or resets
 	newStreak := currentStreak
 	if lastCompletedDate == nil {
-		// First completion ever
 		newStreak = 1
 	} else if lastCompletedDate.Format("2006-01-02") == yesterday {
-		// Continuing streak from yesterday
 		newStreak = currentStreak + 1
 	} else if lastCompletedDate.Format("2006-01-02") == today {
-		// Already completed today, streak unchanged
 		return nil
 	} else {
-		// Streak broken, starting new one
 		newStreak = 1
 	}
 
-	// Update longest streak if needed
 	if newStreak > longestStreak {
 		longestStreak = newStreak
 	}
 
-	// Update the streak record
 	_, err = tx.Exec(ctx, `
         UPDATE user_streaks 
         SET 
@@ -729,17 +710,12 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 		return fmt.Errorf("failed to update user streak: %v", err)
 	}
 
-	// Determine if we should create a streak event based on requirements:
-	// - Streak is more than 2 days old AND
-	// - Either first event about this streak OR last event was 3+ days ago
 	shouldCreateEvent := false
 	log.Println("Updating streak for userid: ", userIDInt, " len:", newStreak)
 	if newStreak > 2 {
 		if lastStreakEventDate == nil {
-			// First event about this streak
 			shouldCreateEvent = true
 		} else {
-			// Check if last event was 3+ days ago
 			daysSinceLastEvent := int(time.Now().Sub(*lastStreakEventDate).Hours() / 24)
 			if daysSinceLastEvent >= 3 {
 				shouldCreateEvent = true
@@ -748,13 +724,10 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 	}
 
 	if shouldCreateEvent {
-		// Create streak event
 		err = createStreakEvent(ctx, tx, userID, newStreak)
 		if err != nil {
 			return fmt.Errorf("failed to create streak event: %v", err)
 		}
-
-		// Update last_streak_event_date
 		_, err = tx.Exec(ctx, `
             UPDATE user_streaks 
             SET last_streak_event_date = $1
@@ -772,7 +745,7 @@ func updateUserStreak(ctx context.Context, tx pgx.Tx, userID string) error {
 func createStreakEvent(ctx context.Context, tx pgx.Tx, userID string, streakDays int) error {
 	eventID := uuid.New().String()
 	now := time.Now()
-	expiresAt := now.Add(30 * 24 * time.Hour) // Streak events last 30 days
+	expiresAt := now.Add(30 * 24 * time.Hour)
 
 	_, err := tx.Exec(ctx, `
         INSERT INTO events (
@@ -794,7 +767,6 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 	}
 	defer tx.Rollback(ctx)
 
-	// Get current task state to check for completion state change
 	var oldIsCompleted bool
 	var oldNeedsConfirmation bool
 	err = tx.QueryRow(ctx, `
@@ -807,7 +779,6 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 		return nil, fmt.Errorf("failed to check task status: %v", err)
 	}
 
-	// Task not found
 	if err == pgx.ErrNoRows {
 		return &pb.UpdateTaskResponse{
 			Success: false,
@@ -893,24 +864,41 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 
 	if isBeingCompleted || req.Task.Completion.NeedsConfirmation {
 		if req.Task.Completion.NeedsConfirmation {
-			// Create "requires_confirmation" event
-			eventID := uuid.New().String()
-			now := time.Now()
-			expiresAt := now.Add(100 * 24 * time.Hour)
-			sizes := []string{"medium", "large"}
-			eventSize := sizes[rand.Intn(len(sizes))]
-
-			_, err = tx.Exec(ctx, `
-				INSERT INTO events (
-					id, user_id, target_user_id, event_type, event_size, 
-					created_at, expires_at, task_ids, likes_count, comments_count
-				) VALUES (
-					$1, $2, $3, 'requires_confirmation', $4, $5, $6, $7, 0, 0
-				)
-			`, eventID, req.Task.UserId, req.Task.UserId, eventSize, now, expiresAt, []string{strings.ToLower(req.Task.Id)})
+			var existingEventCount int
+			err = tx.QueryRow(ctx, `
+				SELECT COUNT(*) FROM events
+				WHERE event_type = 'requires_confirmation'
+				AND $1 = ANY(task_ids)
+				AND (expires_at IS NULL OR expires_at > NOW())
+			`, strings.ToLower(req.Task.Id)).Scan(&existingEventCount)
 
 			if err != nil {
-				log.Printf("failed to create requires_confirmation event: %v", err)
+				log.Printf("failed to check for existing confirmation event: %v", err)
+			}
+
+			if existingEventCount == 0 {
+				eventID := uuid.New().String()
+				now := time.Now()
+				expiresAt := now.Add(100 * 24 * time.Hour)
+				sizes := []string{"medium", "large"}
+				eventSize := sizes[rand.Intn(len(sizes))]
+
+				_, err = tx.Exec(ctx, `
+					INSERT INTO events (
+						id, user_id, target_user_id, event_type, event_size, 
+						created_at, expires_at, task_ids, likes_count, comments_count
+					) VALUES (
+						$1, $2, $3, 'requires_confirmation', $4, $5, $6, $7, 0, 0
+					)
+				`, eventID, req.Task.UserId, req.Task.UserId, eventSize, now, expiresAt, []string{strings.ToLower(req.Task.Id)})
+
+				if err != nil {
+					log.Printf("failed to create requires_confirmation event: %v", err)
+				} else {
+					log.Printf("created new confirmation event for task %s", req.Task.Id)
+				}
+			} else {
+				log.Printf("skipping creation of confirmation event as one already exists for task %s", req.Task.Id)
 			}
 		} else {
 			eventID := uuid.New().String()
@@ -933,8 +921,6 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 				log.Printf("failed to create newly_completed event: %v", err)
 			}
 
-			// Update streak for non-confirmation tasks
-			// Check if this is the first task completed today
 			today := time.Now().Format("2006-01-02")
 			var completedTodayCount int
 
@@ -949,7 +935,6 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 			if err != nil {
 				log.Printf("failed to check completed tasks count: %v", err)
 			} else if completedTodayCount == 0 {
-				// This is the first completion today, update streak
 				err = updateUserStreak(ctx, tx, req.Task.UserId)
 				if err != nil {
 					log.Printf("failed to update user streak: %v", err)
@@ -982,7 +967,6 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 	}
 	defer tx.Rollback(ctx)
 
-	// Get task details
 	var userID string
 	var needsConfirmation bool
 	var isCompleted bool
@@ -1012,9 +996,7 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		}, nil
 	}
 
-	// Update task based on confirmation status
 	if req.IsConfirmed {
-		// Confirm the task
 		_, err = tx.Exec(ctx, `
             UPDATE tasks 
             SET is_confirmed = true, 
@@ -1025,7 +1007,6 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
             WHERE id = $1
         `, req.TaskId, req.ConfirmerId)
 	} else {
-		// Reject the task
 		_, err = tx.Exec(ctx, `
             UPDATE tasks 
             SET is_confirmed = false, 
@@ -1041,7 +1022,6 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		return nil, fmt.Errorf("failed to update task confirmation: %v", err)
 	}
 
-	// Clean up any "requires_confirmation" events for this task
 	_, err = tx.Exec(ctx, `
         UPDATE events
         SET expires_at = NOW() - INTERVAL '1 second' -- Expire immediately
@@ -1053,14 +1033,11 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		log.Printf("failed to expire requires_confirmation event: %v", err)
 	}
 
-	// If task is confirmed (approved), create a newly_completed event and update streak
 	if req.IsConfirmed && !previouslyConfirmed {
-		// Create "newly_completed" event
 		eventID := uuid.New().String()
 		now := time.Now()
 		expiresAt := now.Add(24 * time.Hour)
 
-		// Choose a random event size
 		sizes := []string{"small", "medium", "large"}
 		eventSize := sizes[rand.Intn(len(sizes))]
 
@@ -1076,8 +1053,6 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		if err != nil {
 			log.Printf("failed to create newly_completed event: %v", err)
 		}
-
-		// Update streak if this is the first confirmed task today
 		today := time.Now().Format("2006-01-02")
 		var completedTodayCount int
 
@@ -1093,7 +1068,6 @@ func (h *TaskHandler) ConfirmTaskCompletion(ctx context.Context, req *pb.Confirm
 		if err != nil {
 			log.Printf("failed to check completed tasks count: %v", err)
 		} else if completedTodayCount == 0 {
-			// This is the first confirmed completion today, update streak
 			err = updateUserStreak(ctx, tx, userID)
 			if err != nil {
 				log.Printf("failed to update user streak: %v", err)
@@ -1118,7 +1092,6 @@ func quoteStrings(strs []string) []string {
 	return quoted
 }
 
-// Add this to handlers/tasks.go
 
 func (h *TaskHandler) GetUsersTasksBatch(ctx context.Context, req *pb.GetUsersTasksBatchRequest) (*pb.GetUsersTasksBatchResponse, error) {
 	if len(req.UserIds) == 0 {
@@ -1128,18 +1101,14 @@ func (h *TaskHandler) GetUsersTasksBatch(ctx context.Context, req *pb.GetUsersTa
 		}, nil
 	}
 
-	// Limit the maximum number of users to fetch tasks for in a single request
 	maxUsers := 20
 	if len(req.UserIds) > maxUsers {
 		req.UserIds = req.UserIds[:maxUsers]
 	}
 
-	// Create a map to store tasks for each user
 	userTasks := make(map[string]*pb.UserTasksData)
 
-	// Process each user ID
 	for _, userID := range req.UserIds {
-		// Reuse the GetUserTasks functionality to fetch tasks with proper privacy settings
 		tasksResp, err := h.GetUserTasks(ctx, &pb.GetUserTasksRequest{
 			UserId:      userID,
 			RequesterId: req.RequesterId,
@@ -1147,7 +1116,7 @@ func (h *TaskHandler) GetUsersTasksBatch(ctx context.Context, req *pb.GetUsersTa
 
 		if err != nil {
 			log.Printf("Error fetching tasks for user %s: %v", userID, err)
-			continue // Skip this user and continue with others
+			continue
 		}
 
 		if tasksResp.Success {

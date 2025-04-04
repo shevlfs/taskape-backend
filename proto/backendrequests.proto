@@ -59,6 +59,22 @@ service BackendRequests {
 
   rpc GetUserRelatedEvents(GetUserRelatedEventsRequest)
       returns (GetUserRelatedEventsResponse) {}
+  rpc GetUserStreak(GetUserStreakRequest) returns (GetUserStreakResponse) {}
+}
+
+message GetUserStreakRequest { string user_id = 1; }
+
+message UserStreakData {
+  int32 current_streak = 1;
+  int32 longest_streak = 2;
+  google.protobuf.Timestamp last_completed_date = 3;
+  google.protobuf.Timestamp streak_start_date = 4;
+}
+
+message GetUserStreakResponse {
+  bool success = 1;
+  UserStreakData streak = 2;
+  string error = 3;
 }
 
 message GetUsersBatchRequest { repeated string user_ids = 1; }
@@ -332,10 +348,9 @@ message GetUserRelatedEventsResponse {
   string error = 3;
 }
 
-// Add new message types
 message GetUserEventRequest {
   string event_id = 1;
-  string user_id = 2; // The user requesting access
+  string user_id = 2;
 }
 
 message GetUserEventResponse {

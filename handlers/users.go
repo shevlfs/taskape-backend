@@ -224,7 +224,7 @@ func (h *UserHandler) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 	}, nil
 }
 
-// Add this to handlers/users.go
+
 
 func (h *UserHandler) GetUsersBatch(ctx context.Context, req *pb.GetUsersBatchRequest) (*pb.GetUsersBatchResponse, error) {
 	if len(req.UserIds) == 0 {
@@ -234,37 +234,37 @@ func (h *UserHandler) GetUsersBatch(ctx context.Context, req *pb.GetUsersBatchRe
 		}, nil
 	}
 
-	// Limit the maximum number of users to fetch in a single request
+	
 	maxUsers := 50
 	if len(req.UserIds) > maxUsers {
 		req.UserIds = req.UserIds[:maxUsers]
 	}
 
-	// Create a parameterized query to fetch multiple users by ID
+	
 	query := `
 		SELECT id, handle, bio, profile_picture, color
 		FROM users
 		WHERE id = ANY($1)
 	`
 
-	// Convert string IDs to int64 for PostgreSQL
+	
 	userIDInts := make([]int64, 0, len(req.UserIds))
 	for _, id := range req.UserIds {
 		userID, err := strconv.ParseInt(id, 10, 64)
 		if err != nil {
-			continue // Skip invalid IDs
+			continue 
 		}
 		userIDInts = append(userIDInts, userID)
 	}
 
-	// Execute the query
+	
 	rows, err := h.Pool.Query(ctx, query, userIDInts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %v", err)
 	}
 	defer rows.Close()
 
-	// Process the results
+	
 	var users []*pb.UserResponse
 	for rows.Next() {
 		var id int64
@@ -294,7 +294,7 @@ func (h *UserHandler) GetUsersBatch(ctx context.Context, req *pb.GetUsersBatchRe
 	}, nil
 }
 
-// Add this to handlers/users.go
+
 
 func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfileRequest) (*pb.EditUserProfileResponse, error) {
 	if req.UserId == "" {
@@ -310,7 +310,7 @@ func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfi
 	}
 	defer tx.Rollback(ctx)
 
-	// Check if user exists
+	
 	var exists bool
 	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.UserId).Scan(&exists)
 	if err != nil {
@@ -324,7 +324,7 @@ func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfi
 		}, nil
 	}
 
-	// Check if handle is changing and if so, check availability
+	
 	if req.Handle != "" {
 		var currentHandle string
 		err = tx.QueryRow(ctx, "SELECT handle FROM users WHERE id = $1", req.UserId).Scan(&currentHandle)
@@ -333,7 +333,7 @@ func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfi
 		}
 
 		if currentHandle != req.Handle {
-			// Check if the new handle is available
+			
 			var handleExists bool
 			err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE handle = $1 AND id != $2)", req.Handle, req.UserId).Scan(&handleExists)
 			if err != nil {
@@ -349,10 +349,10 @@ func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfi
 		}
 	}
 
-	// Build the update query dynamically based on provided fields
+	
 	updateFields := []string{}
-	args := []interface{}{req.UserId} // First arg is always the user ID
-	argCount := 2                     // Start from 2 since the first parameter ($1) is the user ID in the WHERE clause
+	args := []interface{}{req.UserId} 
+	argCount := 2                     
 
 	if req.Handle != "" {
 		updateFields = append(updateFields, fmt.Sprintf("handle = $%d", argCount))
@@ -378,7 +378,7 @@ func (h *UserHandler) EditUserProfile(ctx context.Context, req *pb.EditUserProfi
 		argCount++
 	}
 
-	// Only proceed if we have fields to update
+	
 	if len(updateFields) == 0 {
 		return &pb.EditUserProfileResponse{
 			Success: false,
@@ -415,7 +415,7 @@ func (h *UserHandler) CreateGroup(ctx context.Context, req *pb.CreateGroupReques
 	}
 	defer tx.Rollback(ctx)
 
-	// First,  if the creator exists
+	
 	var creatorExists bool
 	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.CreatorId).Scan(&creatorExists)
 	if err != nil {
@@ -443,7 +443,7 @@ func (h *UserHandler) CreateGroup(ctx context.Context, req *pb.CreateGroupReques
 		return nil, fmt.Errorf("failed to create group: %v", err)
 	}
 
-	// Add the creator as a member with admin privileges
+	
 	_, err = tx.Exec(ctx, `
 		INSERT INTO group_members (
 			group_id, user_id, role, joined_at
@@ -480,7 +480,7 @@ func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRe
 	}
 	defer tx.Rollback(ctx)
 
-	// First, check if the group exists
+	
 	var groupExists bool
 	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", req.GroupId).Scan(&groupExists)
 	if err != nil {
@@ -494,7 +494,7 @@ func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRe
 		}, nil
 	}
 
-	// Check if the requester is a member of the group
+	
 	var isMember bool
 	if req.RequesterId != "" {
 		err = tx.QueryRow(ctx, `
@@ -508,7 +508,7 @@ func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRe
 		}
 	}
 
-	// Only group members can view group tasks
+	
 	if !isMember && req.RequesterId != "" {
 		return &pb.GetGroupTasksResponse{
 			Success: false,
@@ -516,7 +516,7 @@ func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRe
 		}, nil
 	}
 
-	// Query tasks associated with this group
+	
 	rows, err := tx.Query(ctx, `
 		SELECT 
 			id, user_id, name, description, created_at, deadline, author, "group", group_id,
@@ -562,7 +562,7 @@ func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRe
 			return nil, fmt.Errorf("failed to scan task row: %v", err)
 		}
 
-		// Convert nullable fields
+		
 		if customHoursPtr != nil {
 			customHours = *customHoursPtr
 		}
@@ -579,7 +579,7 @@ func (h *UserHandler) GetGroupTasks(ctx context.Context, req *pb.GetGroupTasksRe
 			confirmationUserID = *confirmationUserIDPtr
 		}
 
-		// Convert timestamps to protobuf format
+		
 		createdAtProto := timestamppb.New(createdAt)
 		var deadlineProto, confirmedAtProto *timestamppb.Timestamp
 		if deadlinePtr != nil {
@@ -652,7 +652,7 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 	}
 	defer tx.Rollback(ctx)
 
-	// Check if the group exists
+	
 	var groupExists bool
 	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", req.GroupId).Scan(&groupExists)
 	if err != nil {
@@ -666,7 +666,7 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 		}, nil
 	}
 
-	// Check if the inviter is a member with appropriate permissions
+	
 	var inviterRole string
 	err = tx.QueryRow(ctx, `
 		SELECT role FROM group_members 
@@ -682,7 +682,7 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 		return nil, fmt.Errorf("failed to check inviter role: %v", err)
 	}
 
-	// Only admins or members with invite permissions can invite others
+	
 	if inviterRole != "admin" && inviterRole != "member" {
 		return &pb.InviteToGroupResponse{
 			Success: false,
@@ -690,7 +690,7 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 		}, nil
 	}
 
-	// Check if the invitee exists
+	
 	var inviteeExists bool
 	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", req.InviteeId).Scan(&inviteeExists)
 	if err != nil {
@@ -704,7 +704,7 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 		}, nil
 	}
 
-	// Check if the invitee is already a member
+	
 	var alreadyMember bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(
@@ -723,7 +723,7 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 		}, nil
 	}
 
-	// Check if there's already a pending invite
+	
 	var pendingInviteExists bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(
@@ -742,10 +742,10 @@ func (h *UserHandler) InviteToGroup(ctx context.Context, req *pb.InviteToGroupRe
 		}, nil
 	}
 
-	// Generate a new invite ID
+	
 	inviteID := uuid.New().String()
 
-	// Create the invite
+	
 	_, err = tx.Exec(ctx, `
 		INSERT INTO group_invites (
 			id, group_id, inviter_id, invitee_id, status, created_at
@@ -782,7 +782,7 @@ func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroup
 	}
 	defer tx.Rollback(ctx)
 
-	// Get the invite details
+	
 	var groupID, inviteeID string
 	var status string
 	err = tx.QueryRow(ctx, `
@@ -800,7 +800,7 @@ func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroup
 		return nil, fmt.Errorf("failed to get invite details: %v", err)
 	}
 
-	// Verify that the user accepting/rejecting is the invitee
+	
 	if inviteeID != req.UserId {
 		return &pb.AcceptGroupInviteResponse{
 			Success: false,
@@ -808,7 +808,7 @@ func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroup
 		}, nil
 	}
 
-	// Check if the invite is still pending
+	
 	if status != "pending" {
 		return &pb.AcceptGroupInviteResponse{
 			Success: false,
@@ -816,7 +816,7 @@ func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroup
 		}, nil
 	}
 
-	// Update the invite status based on the accept flag
+	
 	newStatus := "rejected"
 	if req.Accept {
 		newStatus = "accepted"
@@ -831,9 +831,9 @@ func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroup
 		return nil, fmt.Errorf("failed to update invite status: %v", err)
 	}
 
-	// If accepted, add user to the group
+	
 	if req.Accept {
-		// Check if the group still exists
+		
 		var groupExists bool
 		err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", groupID).Scan(&groupExists)
 		if err != nil {
@@ -847,7 +847,7 @@ func (h *UserHandler) AcceptGroupInvite(ctx context.Context, req *pb.AcceptGroup
 			}, nil
 		}
 
-		// Add user to the group
+		
 		_, err = tx.Exec(ctx, `
 			INSERT INTO group_members (
 				group_id, user_id, role, joined_at
@@ -883,7 +883,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 	}
 	defer tx.Rollback(ctx)
 
-	// Check if the group exists
+	
 	var groupExists bool
 	err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM groups WHERE id = $1)", req.GroupId).Scan(&groupExists)
 	if err != nil {
@@ -897,7 +897,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 		}, nil
 	}
 
-	// Check if the admin is the creator of the group
+	
 	var creatorId string
 	err = tx.QueryRow(ctx, "SELECT creator_id FROM groups WHERE id = $1", req.GroupId).Scan(&creatorId)
 	if err != nil {
@@ -911,7 +911,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 		}, nil
 	}
 
-	// Check if the user to be kicked is a member
+	
 	var isMember bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(
@@ -930,7 +930,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 		}, nil
 	}
 
-	// Cannot kick the creator
+	
 	if req.UserId == creatorId {
 		return &pb.KickUserFromGroupResponse{
 			Success: false,
@@ -938,7 +938,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 		}, nil
 	}
 
-	// Remove the user from the group
+	
 	_, err = tx.Exec(ctx, `
 		DELETE FROM group_members
 		WHERE group_id = $1 AND user_id = $2
@@ -947,7 +947,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 		return nil, fmt.Errorf("failed to remove user from group: %v", err)
 	}
 
-	// Cancel any pending invites for this user to this group
+	
 	_, err = tx.Exec(ctx, `
 		UPDATE group_invites
 		SET status = 'cancelled', responded_at = $1
@@ -955,7 +955,7 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 	`, time.Now(), req.GroupId, req.UserId)
 	if err != nil {
 		log.Printf("Warning: Failed to cancel pending invites: %v", err)
-		// Continue execution even if this fails
+		
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -964,5 +964,84 @@ func (h *UserHandler) KickUserFromGroup(ctx context.Context, req *pb.KickUserFro
 
 	return &pb.KickUserFromGroupResponse{
 		Success: true,
+	}, nil
+}
+
+
+
+func (h *UserHandler) GetUserStreak(ctx context.Context, req *pb.GetUserStreakRequest) (*pb.GetUserStreakResponse, error) {
+	if req.UserId == "" {
+		return &pb.GetUserStreakResponse{
+			Success: false,
+			Error:   "User ID is required",
+		}, nil
+	}
+
+	userIDInt, err := strconv.Atoi(req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID format: %v", err)
+	}
+
+	
+	var userExists bool
+	err = h.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)", userIDInt).Scan(&userExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if user exists: %v", err)
+	}
+
+	if !userExists {
+		return &pb.GetUserStreakResponse{
+			Success: false,
+			Error:   "User not found",
+		}, nil
+	}
+
+	
+	var currentStreak, longestStreak int32
+	var lastCompletedDate, streakStartDate *time.Time
+
+	err = h.Pool.QueryRow(ctx, `
+		SELECT 
+			COALESCE(current_streak, 0), 
+			COALESCE(longest_streak, 0), 
+			last_completed_date,
+			(SELECT MIN(confirmed_at) FROM tasks 
+			 WHERE user_id = $1::text 
+			 AND is_completed = true 
+			 AND confirmed_at > NOW() - INTERVAL '1 day' * current_streak)
+		FROM user_streaks 
+		WHERE user_id = $1
+	`, userIDInt).Scan(&currentStreak, &longestStreak, &lastCompletedDate, &streakStartDate)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			
+			return &pb.GetUserStreakResponse{
+				Success: true,
+				Streak: &pb.UserStreakData{
+					CurrentStreak: 0,
+					LongestStreak: 0,
+				},
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to get user streak: %v", err)
+	}
+
+	streakData := &pb.UserStreakData{
+		CurrentStreak: currentStreak,
+		LongestStreak: longestStreak,
+	}
+
+	if lastCompletedDate != nil {
+		streakData.LastCompletedDate = timestamppb.New(*lastCompletedDate)
+	}
+
+	if streakStartDate != nil {
+		streakData.StreakStartDate = timestamppb.New(*streakStartDate)
+	}
+
+	return &pb.GetUserStreakResponse{
+		Success: true,
+		Streak:  streakData,
 	}, nil
 }

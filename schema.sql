@@ -61,7 +61,6 @@ CREATE INDEX IF NOT EXISTS idx_user_friends_user_id ON user_friends(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_friends_friend_id ON user_friends(friend_id);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_sender_id ON friend_requests(sender_id);
 CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_id ON friend_requests(receiver_id);
--- Add proof-related fields to the tasks table (same as before)
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS proof_needed BOOLEAN DEFAULT FALSE;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS proof_description TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS needs_confirmation BOOLEAN DEFAULT FALSE;
@@ -69,7 +68,6 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_confirmed BOOLEAN DEFAULT FALSE;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmation_user_id VARCHAR(255);
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP WITH TIME ZONE;
 
--- Update events table (remove is_read field)
 CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id),
@@ -86,7 +84,6 @@ CREATE TABLE IF NOT EXISTS events (
   CONSTRAINT valid_event_size CHECK (event_size IN ('small', 'medium', 'large'))
 );
 
--- Add event likes table
 CREATE TABLE IF NOT EXISTS event_likes (
   id SERIAL PRIMARY KEY,
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -95,7 +92,6 @@ CREATE TABLE IF NOT EXISTS event_likes (
   UNIQUE (event_id, user_id)
 );
 
--- Add event comments table
 CREATE TABLE IF NOT EXISTS event_comments (
   id UUID PRIMARY KEY,
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -115,7 +111,6 @@ CREATE TABLE IF NOT EXISTS user_streaks (
     last_streak_event_date DATE
 );
 
--- Add indices for better performance
 CREATE INDEX IF NOT EXISTS idx_events_user_id ON events(user_id);
 CREATE INDEX IF NOT EXISTS idx_events_target_user_id ON events(target_user_id);
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
@@ -127,7 +122,6 @@ CREATE INDEX IF NOT EXISTS idx_event_comments_event_id ON event_comments(event_i
 CREATE INDEX IF NOT EXISTS idx_event_comments_user_id ON event_comments(user_id);
 CREATE INDEX IF NOT EXISTS idx_event_comments_created_at ON event_comments(created_at);
 
--- Function to update likes count
 CREATE OR REPLACE FUNCTION update_event_likes_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -140,14 +134,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to maintain likes count
 DROP TRIGGER IF EXISTS event_likes_count_trigger ON event_likes;
 CREATE TRIGGER event_likes_count_trigger
 AFTER INSERT OR DELETE ON event_likes
 FOR EACH ROW
 EXECUTE FUNCTION update_event_likes_count();
 
--- Function to update comments count
 CREATE OR REPLACE FUNCTION update_event_comments_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -164,9 +156,34 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to maintain comments count
 DROP TRIGGER IF EXISTS event_comments_count_trigger ON event_comments;
 CREATE TRIGGER event_comments_count_trigger
 AFTER INSERT OR UPDATE OR DELETE ON event_comments
 FOR EACH ROW
 EXECUTE FUNCTION update_event_comments_count();
+
+CREATE TABLE IF NOT EXISTS user_streaks (
+    user_id INT PRIMARY KEY REFERENCES users(id),
+    current_streak INT NOT NULL DEFAULT 0,
+    longest_streak INT NOT NULL DEFAULT 0,
+    last_completed_date TIMESTAMP,
+    last_streak_event_date TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_streaks_user_id ON user_streaks(user_id);
+
+CREATE OR REPLACE FUNCTION update_longest_streak()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.current_streak > NEW.longest_streak THEN
+        NEW.longest_streak := NEW.current_streak;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_longest_streak_trigger ON user_streaks;
+CREATE TRIGGER update_longest_streak_trigger
+BEFORE UPDATE ON user_streaks
+FOR EACH ROW
+EXECUTE FUNCTION update_longest_streak();
