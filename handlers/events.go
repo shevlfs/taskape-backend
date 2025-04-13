@@ -73,7 +73,6 @@ func stringArrayToPostgresArray(arr []string) string {
 	return result
 }
 
-
 func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUserRelatedEventsRequest) (*pb.GetUserRelatedEventsResponse, error) {
 	if req.TargetUserId == "" || req.RequesterId == "" {
 		return &pb.GetUserRelatedEventsResponse{
@@ -103,7 +102,6 @@ func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUser
 	}
 	defer tx.Rollback(ctx)
 
-	
 	isSelf := req.RequesterId == req.TargetUserId
 
 	var isFriend bool
@@ -190,10 +188,9 @@ func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUser
 		return nil, fmt.Errorf("error iterating event rows: %v", err)
 	}
 
-	
 	taskPrivacyMap := make(map[string]TaskPrivacyInfo)
 	if len(allTaskIDs) > 0 {
-		
+
 		uniqueTaskIDs := make([]string, 0, len(allTaskIDs))
 		seen := make(map[string]bool)
 		for _, id := range allTaskIDs {
@@ -250,7 +247,6 @@ func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUser
 		friendIDs = append(friendIDs, friendID)
 	}
 
-	
 	var filteredEvents []*pb.Event
 	for _, event := range events {
 		if canViewEvent(event, requesterIDInt, friendIDs, taskPrivacyMap) {
@@ -258,7 +254,6 @@ func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUser
 		}
 	}
 
-	
 	for i, event := range filteredEvents {
 		likeRows, err := tx.Query(ctx, `
             SELECT user_id::text 
@@ -267,7 +262,7 @@ func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUser
         `, event.Id)
 
 		if err != nil {
-			continue 
+			continue
 		}
 
 		var likedByUserIds []string
@@ -293,7 +288,6 @@ func (h *EventHandler) GetUserRelatedEvents(ctx context.Context, req *pb.GetUser
 	}, nil
 }
 
-
 func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsRequest) (*pb.GetUserEventsResponse, error) {
 	if req.UserId == "" {
 		return &pb.GetUserEventsResponse{
@@ -302,12 +296,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		}, nil
 	}
 
-	
-	
-	
-	
-
-	
 	userIDInt, err := strconv.Atoi(req.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user id format: %v", err)
@@ -320,7 +308,7 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 	defer tx.Rollback(ctx)
 
 	var allowedUserIDs []int
-	allowedUserIDs = append(allowedUserIDs, userIDInt) 
+	allowedUserIDs = append(allowedUserIDs, userIDInt)
 
 	friendRows, err := tx.Query(ctx, `
         SELECT friend_id FROM user_friends WHERE user_id = $1
@@ -338,7 +326,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		allowedUserIDs = append(allowedUserIDs, friendID)
 	}
 
-	
 	query := `
         SELECT 
             e.id, e.user_id, e.target_user_id, e.event_type, e.event_size, 
@@ -385,10 +372,9 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 		return nil, fmt.Errorf("error iterating event rows: %v", err)
 	}
 
-	
 	taskPrivacyMap := make(map[string]TaskPrivacyInfo)
 	if len(allTaskIDs) > 0 {
-		
+
 		uniqueTaskIDs := make([]string, 0, len(allTaskIDs))
 		seen := make(map[string]bool)
 		for _, id := range allTaskIDs {
@@ -398,7 +384,6 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
 			}
 		}
 
-		
 		taskRows, err := tx.Query(ctx, `
             SELECT 
                 id, user_id, privacy_level, privacy_except_ids
@@ -444,7 +429,7 @@ func (h *EventHandler) GetUserEvents(ctx context.Context, req *pb.GetUserEventsR
         `, event.Id)
 
 		if err != nil {
-			continue 
+			continue
 		}
 
 		var likedByUserIds []string
@@ -488,7 +473,6 @@ func canViewEvent(event *pb.Event, viewerID int, friendIDs []int, taskPrivacyMap
 		return false
 	}
 
-	
 	if event.Type == pb.EventType_NEW_TASKS_ADDED ||
 		event.Type == pb.EventType_NEWLY_RECEIVED ||
 		event.Type == pb.EventType_NEWLY_COMPLETED ||
@@ -564,17 +548,17 @@ func scanEvent(row pgx.Row) (*pb.Event, error) {
 
 	eventType := pb.EventType_NEW_TASKS_ADDED
 	switch eventTypeStr {
-	case "new_tasks_added":
+	case EventTypeNewTasksAdded:
 		eventType = pb.EventType_NEW_TASKS_ADDED
-	case "newly_received":
+	case EventTypeNewlyReceived:
 		eventType = pb.EventType_NEWLY_RECEIVED
-	case "newly_completed":
+	case EventTypeNewlyCompleted:
 		eventType = pb.EventType_NEWLY_COMPLETED
-	case "requires_confirmation":
+	case EventTypeRequiresConfirmation:
 		eventType = pb.EventType_REQUIRES_CONFIRMATION
-	case "n_day_streak":
+	case EventTypeNDayStreak:
 		eventType = pb.EventType_N_DAY_STREAK
-	case "deadline_coming_up":
+	case EventTypeDeadlineComingUp:
 		eventType = pb.EventType_DEADLINE_COMING_UP
 	}
 
@@ -609,7 +593,6 @@ func scanEvent(row pgx.Row) (*pb.Event, error) {
 	return event, nil
 }
 
-
 func scanEventRow(rows pgx.Rows) (*pb.Event, error) {
 	var (
 		id            string
@@ -636,17 +619,17 @@ func scanEventRow(rows pgx.Rows) (*pb.Event, error) {
 
 	eventType := pb.EventType_NEW_TASKS_ADDED
 	switch eventTypeStr {
-	case "new_tasks_added":
+	case EventTypeNewTasksAdded:
 		eventType = pb.EventType_NEW_TASKS_ADDED
-	case "newly_received":
+	case EventTypeNewlyReceived:
 		eventType = pb.EventType_NEWLY_RECEIVED
-	case "newly_completed":
+	case EventTypeNewlyCompleted:
 		eventType = pb.EventType_NEWLY_COMPLETED
-	case "requires_confirmation":
+	case EventTypeRequiresConfirmation:
 		eventType = pb.EventType_REQUIRES_CONFIRMATION
-	case "n_day_streak":
+	case EventTypeNDayStreak:
 		eventType = pb.EventType_N_DAY_STREAK
-	case "deadline_coming_up":
+	case EventTypeDeadlineComingUp:
 		eventType = pb.EventType_DEADLINE_COMING_UP
 	}
 
@@ -682,7 +665,7 @@ func scanEventRow(rows pgx.Rows) (*pb.Event, error) {
 }
 
 func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, userID int, _ int) (*pb.Event, error) {
-	
+
 	var recentEventExists bool
 	err := tx.QueryRow(ctx, `
 		SELECT EXISTS(
@@ -697,10 +680,9 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 	}
 
 	if recentEventExists {
-		return nil, nil 
+		return nil, nil
 	}
 
-	
 	var streakDays int
 	err = tx.QueryRow(ctx, `
 		WITH daily_completions AS (
@@ -796,7 +778,6 @@ func (h *EventHandler) generateEventForUser(ctx context.Context, tx pgx.Tx, user
 			return nil, fmt.Errorf("failed to insert task event: %v", err)
 		}
 
-		
 		return &pb.Event{
 			Id:            eventID,
 			UserId:        strconv.Itoa(userID),
@@ -831,7 +812,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 		}, nil
 	}
 
-	
 	userIDInt, err := strconv.Atoi(req.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("invalid user ID format: %v", err)
@@ -843,7 +823,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 	}
 	defer tx.Rollback(ctx)
 
-	
 	var exists bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM events WHERE id = $1::uuid)
@@ -860,7 +839,6 @@ func (h *EventHandler) LikeEvent(ctx context.Context, req *pb.LikeEventRequest) 
 		}, nil
 	}
 
-	
 	var alreadyLiked bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM event_likes WHERE event_id = $1::uuid AND user_id = $2)
@@ -933,7 +911,6 @@ func (h *EventHandler) UnlikeEvent(ctx context.Context, req *pb.UnlikeEventReque
 	}
 	defer tx.Rollback(ctx)
 
-	
 	var exists bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM event_likes WHERE event_id = $1::uuid AND user_id = $2)
@@ -1008,7 +985,6 @@ func (h *EventHandler) AddEventComment(ctx context.Context, req *pb.AddEventComm
 	}
 	defer tx.Rollback(ctx)
 
-	
 	var exists bool
 	err = tx.QueryRow(ctx, `
 		SELECT EXISTS(SELECT 1 FROM events WHERE id = $1)
@@ -1100,7 +1076,6 @@ func (h *EventHandler) GetEventComments(ctx context.Context, req *pb.GetEventCom
 		return nil, fmt.Errorf("failed to get total comments count: %v", err)
 	}
 
-	
 	rows, err := h.Pool.Query(ctx, `
 		SELECT id, event_id, user_id, content, created_at, is_edited, edited_at
 		FROM event_comments
@@ -1156,7 +1131,6 @@ func (h *EventHandler) GetEventComments(ctx context.Context, req *pb.GetEventCom
 	}, nil
 }
 
-
 func (h *EventHandler) DeleteEventComment(ctx context.Context, req *pb.DeleteEventCommentRequest) (*pb.DeleteEventCommentResponse, error) {
 	if req.CommentId == "" || req.UserId == "" {
 		return &pb.DeleteEventCommentResponse{
@@ -1171,7 +1145,6 @@ func (h *EventHandler) DeleteEventComment(ctx context.Context, req *pb.DeleteEve
 	}
 	defer tx.Rollback(ctx)
 
-	
 	var exists bool
 	var commentUserId string
 	err = tx.QueryRow(ctx, `

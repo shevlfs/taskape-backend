@@ -56,6 +56,7 @@ service BackendRequests {
       returns (AcceptGroupInviteResponse) {}
   rpc KickUserFromGroup(KickUserFromGroupRequest)
       returns (KickUserFromGroupResponse) {}
+  rpc GetUserGroups(GetUserGroupsRequest) returns (GetUserGroupsResponse) {}
 
   rpc GetUserRelatedEvents(GetUserRelatedEventsRequest)
       returns (GetUserRelatedEventsResponse) {}
@@ -533,4 +534,23 @@ message DeleteEventCommentRequest {
 message DeleteEventCommentResponse {
   bool success = 1;
   string error = 2;
+}
+
+message GetUserGroupsRequest { string user_id = 1; }
+
+message Group {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string color = 4;
+  string creator_id = 5;
+  google.protobuf.Timestamp created_at = 6;
+  repeated string members = 7;
+  repeated string admins = 8;
+}
+
+message GetUserGroupsResponse {
+  bool success = 1;
+  repeated Group groups = 2;
+  string error = 3;
 }

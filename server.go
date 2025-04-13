@@ -164,6 +164,10 @@ func (s *Server) KickUserFromGroup(ctx context.Context, req *pb.KickUserFromGrou
 	return s.userHandler.KickUserFromGroup(ctx, req)
 }
 
+func (s *Server) GetUserGroups(ctx context.Context, req *pb.GetUserGroupsRequest) (*pb.GetUserGroupsResponse, error) {
+	return s.userHandler.GetUserGroups(ctx, req)
+}
+
 func (s *Server) GetUserStreak(ctx context.Context, req *pb.GetUserStreakRequest) (*pb.GetUserStreakResponse, error) {
 	return s.userHandler.GetUserStreak(ctx, req)
 }
