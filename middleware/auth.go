@@ -21,7 +21,7 @@ var publicEndpoints = []string{
 
 func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	fmt.Println(info.FullMethod)
-	
+
 	if slices.Contains(publicEndpoints, info.FullMethod) {
 		return handler(ctx, req)
 	}

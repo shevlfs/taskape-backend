@@ -82,10 +82,10 @@ func (o *LargeObjects) Unlink(oid pgtype.OID) error {
 // A LargeObject is a large object stored on the server. It is only valid within
 // the transaction that it was initialized in. It implements these interfaces:
 //
-//    io.Writer
-//    io.Reader
-//    io.Seeker
-//    io.Closer
+//	io.Writer
+//	io.Reader
+//	io.Seeker
+//	io.Closer
 type LargeObject struct {
 	fd int32
 	lo *LargeObjects

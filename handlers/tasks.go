@@ -85,7 +85,6 @@ func (h *TaskHandler) CreateTask(ctx context.Context, req *pb.CreateTaskRequest)
 		return nil, fmt.Errorf("failed to insert task: %v", err)
 	}
 
-
 	var eventType string
 	var eventTargetUserID string
 
@@ -1091,7 +1090,6 @@ func quoteStrings(strs []string) []string {
 	}
 	return quoted
 }
-
 
 func (h *TaskHandler) GetUsersTasksBatch(ctx context.Context, req *pb.GetUsersTasksBatchRequest) (*pb.GetUsersTasksBatchResponse, error) {
 	if len(req.UserIds) == 0 {

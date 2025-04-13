@@ -1003,7 +1003,6 @@ WHERE user_id = $1;
 	}, nil
 }
 
-
 func (h *UserHandler) GetUserGroups(ctx context.Context, req *pb.GetUserGroupsRequest) (*pb.GetUserGroupsResponse, error) {
 	if req.UserId == "" {
 		return &pb.GetUserGroupsResponse{

@@ -1227,22 +1227,22 @@ func parsePort(s string) (uint16, error) {
 
 // ParseConnectionString parses either a URI or a DSN connection string and builds ConnConfig.
 //
-//   # Example DSN
-//   user=jack password=secret host=pg.example.com port=5432 dbname=mydb sslmode=verify-ca
+//	# Example DSN
+//	user=jack password=secret host=pg.example.com port=5432 dbname=mydb sslmode=verify-ca
 //
-//   # Example URL
-//   postgres://jack:secret@pg.example.com:5432/mydb?sslmode=verify-ca
+//	# Example URL
+//	postgres://jack:secret@pg.example.com:5432/mydb?sslmode=verify-ca
 //
 // ParseConnectionString supports specifying multiple hosts in similar manner to libpq.
 // Host and port may include comma separated values that will be tried in order.
 // This can be used as part of a high availability system.
 // See https://www.postgresql.org/docs/11/libpq-connect.html#LIBPQ-MULTIPLE-HOSTS for more information.
 //
-//   # Example URL
-//   postgres://jack:secret@foo.example.com:5432,bar.example.com:5432/mydb
+//	# Example URL
+//	postgres://jack:secret@foo.example.com:5432,bar.example.com:5432/mydb
 //
-//   # Example DSN
-//   user=jack password=secret host=host1,host2,host3 port=5432,5433,5434 dbname=mydb sslmode=verify-ca
+//	# Example DSN
+//	user=jack password=secret host=host1,host2,host3 port=5432,5433,5434 dbname=mydb sslmode=verify-ca
 func ParseConnectionString(s string) (ConnConfig, error) {
 	if u, err := url.Parse(s); err == nil && u.Scheme != "" {
 		return ParseURI(s)
