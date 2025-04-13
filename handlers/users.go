@@ -952,36 +952,67 @@ func (h *UserHandler) GetUserStreak(ctx context.Context, req *pb.GetUserStreakRe
 		}, nil
 	}
 
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var currentStreak, longestStreak int32
 	var lastCompletedDate, streakStartDate *time.Time
 
-	err = h.Pool.QueryRow(ctx, `
-    SELECT 
-    COALESCE(current_streak, 0), 
-    COALESCE(longest_streak, 0), 
-    last_completed_date,
-    (SELECT MIN(confirmed_at) 
-     FROM tasks 
-     WHERE user_id::integer = $1
-       AND is_completed = true 
-       AND confirmed_at > NOW() - INTERVAL '1 day' * current_streak)
-FROM user_streaks 
-WHERE user_id = $1;
+	err = tx.QueryRow(ctx, `
+		SELECT 
+			COALESCE(current_streak, 0), 
+			COALESCE(longest_streak, 0), 
+			last_completed_date,
+			(SELECT MIN(confirmed_at) 
+			 FROM tasks 
+			 WHERE user_id::integer = $1
+			   AND is_completed = true 
+			   AND confirmed_at > NOW() - INTERVAL '1 day' * current_streak)
+		FROM user_streaks 
+		WHERE user_id = $1
+	`, userIDInt).Scan(&currentStreak, &longestStreak, &lastCompletedDate, &streakStartDate)
 
-`, userIDInt).Scan(&currentStreak, &longestStreak, &lastCompletedDate, &streakStartDate)
+	if err == pgx.ErrNoRows {
+		return &pb.GetUserStreakResponse{
+			Success: true,
+			Streak: &pb.UserStreakData{
+				CurrentStreak: 0,
+				LongestStreak: 0,
+			},
+		}, nil
+	}
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
-
-			return &pb.GetUserStreakResponse{
-				Success: true,
-				Streak: &pb.UserStreakData{
-					CurrentStreak: 0,
-					LongestStreak: 0,
-				},
-			}, nil
-		}
 		return nil, fmt.Errorf("failed to get user streak: %v", err)
+	}
+
+	shouldResetStreak := lastCompletedDate == nil ||
+		time.Since(*lastCompletedDate) > 24*time.Hour
+
+	if shouldResetStreak {
+		_, err = tx.Exec(ctx, `
+			UPDATE user_streaks
+			SET current_streak = 0,
+				last_completed_date = NULL,
+				last_streak_event_date = NULL
+			WHERE user_id = $1
+		`, userIDInt)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to reset user streak: %v", err)
+		}
+
+		currentStreak = 0
+		lastCompletedDate = nil
+		streakStartDate = nil
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
 	streakData := &pb.UserStreakData{
@@ -1081,5 +1112,68 @@ func (h *UserHandler) GetUserGroups(ctx context.Context, req *pb.GetUserGroupsRe
 	return &pb.GetUserGroupsResponse{
 		Success: true,
 		Groups:  groups,
+	}, nil
+}
+
+func (h *UserHandler) GetGroupInvitations(ctx context.Context, req *pb.GetGroupInvitationsRequest) (*pb.GetGroupInvitationsResponse, error) {
+	if req.UserId == "" {
+		return &pb.GetGroupInvitationsResponse{
+			Success: false,
+			Error:   "User ID is required",
+		}, nil
+	}
+
+	query := `
+        SELECT gi.id, g.id, g.name, gi.inviter_id, u.handle, gi.created_at
+        FROM group_invites gi
+        JOIN groups g ON gi.group_id = g.id
+        JOIN users u ON gi.inviter_id = u.id
+        WHERE gi.invitee_id = $1 AND gi.status = 'pending'
+        ORDER BY gi.created_at DESC
+    `
+
+	rows, err := h.Pool.Query(ctx, query, req.UserId)
+	if err != nil {
+		return &pb.GetGroupInvitationsResponse{
+			Success: false,
+			Error:   "Failed to get group invitations: " + err.Error(),
+		}, nil
+	}
+	defer rows.Close()
+
+	var invitations []*pb.GroupInvitation
+	for rows.Next() {
+		var (
+			id, groupID, groupName, inviterID, inviterHandle string
+			createdAt                                        time.Time
+		)
+
+		if err := rows.Scan(&id, &groupID, &groupName, &inviterID, &inviterHandle, &createdAt); err != nil {
+			return &pb.GetGroupInvitationsResponse{
+				Success: false,
+				Error:   "Failed to scan invitation data: " + err.Error(),
+			}, nil
+		}
+
+		invitations = append(invitations, &pb.GroupInvitation{
+			Id:            id,
+			GroupId:       groupID,
+			GroupName:     groupName,
+			InviterId:     inviterID,
+			InviterHandle: inviterHandle,
+			CreatedAt:     timestamppb.New(createdAt),
+		})
+	}
+
+	if err = rows.Err(); err != nil {
+		return &pb.GetGroupInvitationsResponse{
+			Success: false,
+			Error:   "Error iterating through results: " + err.Error(),
+		}, nil
+	}
+
+	return &pb.GetGroupInvitationsResponse{
+		Success:     true,
+		Invitations: invitations,
 	}, nil
 }

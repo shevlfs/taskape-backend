@@ -8,7 +8,6 @@ package taskape_proto
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -53,6 +52,7 @@ const (
 	BackendRequests_AcceptGroupInvite_FullMethodName       = "/taskapebackend.BackendRequests/AcceptGroupInvite"
 	BackendRequests_KickUserFromGroup_FullMethodName       = "/taskapebackend.BackendRequests/KickUserFromGroup"
 	BackendRequests_GetUserGroups_FullMethodName           = "/taskapebackend.BackendRequests/GetUserGroups"
+	BackendRequests_GetGroupInvitations_FullMethodName     = "/taskapebackend.BackendRequests/GetGroupInvitations"
 	BackendRequests_GetUserRelatedEvents_FullMethodName    = "/taskapebackend.BackendRequests/GetUserRelatedEvents"
 	BackendRequests_GetUserStreak_FullMethodName           = "/taskapebackend.BackendRequests/GetUserStreak"
 )
@@ -94,6 +94,7 @@ type BackendRequestsClient interface {
 	AcceptGroupInvite(ctx context.Context, in *AcceptGroupInviteRequest, opts ...grpc.CallOption) (*AcceptGroupInviteResponse, error)
 	KickUserFromGroup(ctx context.Context, in *KickUserFromGroupRequest, opts ...grpc.CallOption) (*KickUserFromGroupResponse, error)
 	GetUserGroups(ctx context.Context, in *GetUserGroupsRequest, opts ...grpc.CallOption) (*GetUserGroupsResponse, error)
+	GetGroupInvitations(ctx context.Context, in *GetGroupInvitationsRequest, opts ...grpc.CallOption) (*GetGroupInvitationsResponse, error)
 	GetUserRelatedEvents(ctx context.Context, in *GetUserRelatedEventsRequest, opts ...grpc.CallOption) (*GetUserRelatedEventsResponse, error)
 	GetUserStreak(ctx context.Context, in *GetUserStreakRequest, opts ...grpc.CallOption) (*GetUserStreakResponse, error)
 }
@@ -436,6 +437,16 @@ func (c *backendRequestsClient) GetUserGroups(ctx context.Context, in *GetUserGr
 	return out, nil
 }
 
+func (c *backendRequestsClient) GetGroupInvitations(ctx context.Context, in *GetGroupInvitationsRequest, opts ...grpc.CallOption) (*GetGroupInvitationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGroupInvitationsResponse)
+	err := c.cc.Invoke(ctx, BackendRequests_GetGroupInvitations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *backendRequestsClient) GetUserRelatedEvents(ctx context.Context, in *GetUserRelatedEventsRequest, opts ...grpc.CallOption) (*GetUserRelatedEventsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetUserRelatedEventsResponse)
@@ -493,6 +504,7 @@ type BackendRequestsServer interface {
 	AcceptGroupInvite(context.Context, *AcceptGroupInviteRequest) (*AcceptGroupInviteResponse, error)
 	KickUserFromGroup(context.Context, *KickUserFromGroupRequest) (*KickUserFromGroupResponse, error)
 	GetUserGroups(context.Context, *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
+	GetGroupInvitations(context.Context, *GetGroupInvitationsRequest) (*GetGroupInvitationsResponse, error)
 	GetUserRelatedEvents(context.Context, *GetUserRelatedEventsRequest) (*GetUserRelatedEventsResponse, error)
 	GetUserStreak(context.Context, *GetUserStreakRequest) (*GetUserStreakResponse, error)
 	mustEmbedUnimplementedBackendRequestsServer()
@@ -603,6 +615,9 @@ func (UnimplementedBackendRequestsServer) KickUserFromGroup(context.Context, *Ki
 }
 func (UnimplementedBackendRequestsServer) GetUserGroups(context.Context, *GetUserGroupsRequest) (*GetUserGroupsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserGroups not implemented")
+}
+func (UnimplementedBackendRequestsServer) GetGroupInvitations(context.Context, *GetGroupInvitationsRequest) (*GetGroupInvitationsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGroupInvitations not implemented")
 }
 func (UnimplementedBackendRequestsServer) GetUserRelatedEvents(context.Context, *GetUserRelatedEventsRequest) (*GetUserRelatedEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserRelatedEvents not implemented")
@@ -1225,6 +1240,24 @@ func _BackendRequests_GetUserGroups_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendRequests_GetGroupInvitations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGroupInvitationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendRequestsServer).GetGroupInvitations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BackendRequests_GetGroupInvitations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendRequestsServer).GetGroupInvitations(ctx, req.(*GetGroupInvitationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _BackendRequests_GetUserRelatedEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetUserRelatedEventsRequest)
 	if err := dec(in); err != nil {
@@ -1399,6 +1432,10 @@ var BackendRequests_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserGroups",
 			Handler:    _BackendRequests_GetUserGroups_Handler,
+		},
+		{
+			MethodName: "GetGroupInvitations",
+			Handler:    _BackendRequests_GetGroupInvitations_Handler,
 		},
 		{
 			MethodName: "GetUserRelatedEvents",
