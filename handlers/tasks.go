@@ -904,10 +904,12 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 			now := time.Now()
 			expiresAt := now.Add(24 * time.Hour)
 
-			sizes := []string{"small", "medium", "large"}
-			eventSize := sizes[rand.Intn(len(sizes))]
+			if req.Task.Privacy.Level != "noone" {
 
-			_, err = tx.Exec(ctx, `
+				sizes := []string{"small", "medium", "large"}
+				eventSize := sizes[rand.Intn(len(sizes))]
+
+				_, err = tx.Exec(ctx, `
 				INSERT INTO events (
 					id, user_id, target_user_id, event_type, event_size, 
 					created_at, expires_at, task_ids, likes_count, comments_count
@@ -916,10 +918,10 @@ func (h *TaskHandler) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest)
 				)
 			`, eventID, req.Task.UserId, req.Task.UserId, eventSize, now, expiresAt, []string{req.Task.Id})
 
-			if err != nil {
-				log.Printf("failed to create newly_completed event: %v", err)
+				if err != nil {
+					log.Printf("failed to create newly_completed event: %v", err)
+				}
 			}
-
 			today := time.Now().Format("2006-01-02")
 			var completedTodayCount int
 
